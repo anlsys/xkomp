@@ -35,53 +35,53 @@ __kmpc_for_static_init_4(
         default:
             LOGGER_FATAL("Not implemented");
 
-		case kmp_sch_static:
-		{
-			if (trip_count <= nthreads)
-			{
-				if (tid < trip_count)
-				{
-					*pupper = *plower = *plower + tid * incr;
-                    if (plastiter)
-                        *plastiter = (tid == trip_count - 1);
+        case kmp_sch_static:
+            {
+                if (trip_count <= nthreads)
+                {
+                    if (tid < trip_count)
+                    {
+                        *pupper = *plower = *plower + tid * incr;
+                        if (plastiter)
+                            *plastiter = (tid == trip_count - 1);
+                    }
+                    else
+                    {
+                        *plower = *pupper + incr;
+                        return;
+                    }
+
+                    return ;
                 }
-				else
-				{
-					*plower = *pupper + incr;
-					return;
-				}
+                else
+                {
+                    int chunk_size = trip_count / nthreads;
+                    int extras = trip_count % nthreads;
 
-				return ;
-			}
-			else
-			{
-				int chunk_size = trip_count / nthreads;
-				int extras = trip_count % nthreads;
+                    if (tid < extras)
+                    {
+                        /* The first part is homogeneous with a chunk size a little bit larger */
+                        *pupper = *plower + (tid + 1) * (chunk_size + 1) * incr - incr;
+                        *plower = *plower + tid * (chunk_size + 1) * incr;
+                    }
+                    else
+                    {
+                        *pupper = *plower + extras * (chunk_size + 1) * incr +
+                            (tid + 1 - extras) * chunk_size * incr - incr;
+                        *plower = *plower + extras * (chunk_size + 1) * incr +
+                            (tid - extras) * chunk_size * incr;
+                    }
 
-				if (tid < extras)
-				{
-					/* The first part is homogeneous with a chunk size a little bit larger */
-					*pupper = *plower + (tid + 1) * (chunk_size + 1) * incr - incr;
-					*plower = *plower + tid * (chunk_size + 1) * incr;
-				}
-				else
-				{
-					*pupper = *plower + extras * (chunk_size + 1) * incr +
-					          (tid + 1 - extras) * chunk_size * incr - incr;
-					*plower = *plower + extras * (chunk_size + 1) * incr +
-					          (tid - extras) * chunk_size * incr;
-				}
+                    if (plastiter)
+                    {
+                        if (incr > 0)
+                            *plastiter = *plower <= pupper_old && *pupper > pupper_old - incr;
+                        else
+                            *plastiter = *plower >= pupper_old && *pupper < pupper_old - incr;
+                    }
+                }
 
-				if (plastiter)
-				{
-					if (incr > 0)
-						*plastiter = *plower <= pupper_old && *pupper > pupper_old - incr;
-					else
-						*plastiter = *plower >= pupper_old && *pupper < pupper_old - incr;
-				}
-			}
-
-			break;
-		}
-	}
+                break;
+            }
+    }
 }
