@@ -65,6 +65,28 @@ __kmpc_omp_task_alloc(
 }
 
 extern "C"
+kmp_task_t *
+__kmpc_omp_target_task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_int32 flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int64 device_id
+) {
+    kmp_tasking_flags_t & input_flags = reinterpret_cast<kmp_tasking_flags_t &>(flags);
+
+    // target task is untied defined in the specification
+    # define TASK_UNTIED    0
+    # define TASK_TIED      1
+    input_flags.tiedness = TASK_UNTIED;
+    // input_flags.target = 1;
+
+    return __kmpc_omp_task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
+}
+
+extern "C"
 kmp_int32
 __kmpc_omp_task(
     ident_t * loc_ref,
@@ -80,6 +102,39 @@ __kmpc_omp_task(
 
     xkomp->runtime.task_commit(task);
 
+    return 0;
+}
+
+extern "C"
+
+/*!
+@ingroup TASKING
+@param loc_ref location of the original task directive
+@param gtid Global Thread ID of encountering thread
+@param new_task task thunk allocated by __kmp_omp_task_alloc() for the ''new
+task''
+@param ndeps Number of depend items with possible aliasing
+@param dep_list List of depend items with possible aliasing
+@param ndeps_noalias Number of depend items with no aliasing
+@param noalias_dep_list List of depend items with no aliasing
+
+@return Returns either TASK_CURRENT_NOT_QUEUED if the current task was not
+suspended and queued, or TASK_CURRENT_QUEUED if it was suspended and queued
+
+Schedule a non-thread-switchable task with dependences for execution
+*/
+extern "C"
+kmp_int32
+__kmpc_omp_task_with_deps(
+        ident_t * loc_ref,
+        kmp_int32 gtid,
+        kmp_task_t * new_task,
+        kmp_int32 ndeps,
+        kmp_depend_info_t * dep_list,
+        kmp_int32 ndeps_noalias,
+        kmp_depend_info_t * noalias_dep_list
+) {
+    LOGGER_NOT_IMPLEMENTED();
     return 0;
 }
 

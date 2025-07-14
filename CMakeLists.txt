@@ -8,7 +8,8 @@ SET(XKOMP xkomp)
 project(${XKOMP})
 
 # Version
-set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
+set(VERSION_SCRIPT          "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
+set(VERSION_SCRIPT_TARGET   "${CMAKE_CURRENT_SOURCE_DIR}/version-target.map")
 
 ###############
 # C++ version #
@@ -24,24 +25,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
 SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/api.cc
     ${CMAKE_SOURCE_DIR}/src/barrier.cc
+    ${CMAKE_SOURCE_DIR}/src/device.cc
     ${CMAKE_SOURCE_DIR}/src/env.cc
     ${CMAKE_SOURCE_DIR}/src/for.cc
     ${CMAKE_SOURCE_DIR}/src/fork.cc
     ${CMAKE_SOURCE_DIR}/src/single.cc
     ${CMAKE_SOURCE_DIR}/src/task.cc
-    ${CMAKE_SOURCE_DIR}/src/target.cc
 )
 
-# SET(SOURCE_FILES_TARGET
-#     ${CMAKE_SOURCE_DIR}/src/libomptarget.cc)
-
-# XKOMP version
-add_custom_command(
-    OUTPUT  always-run
-    COMMAND python3 ${CMAKE_SOURCE_DIR}/../utils/version.py ${CMAKE_SOURCE_DIR}/include/xkomp xkomp-version
-    COMMENT "Always generate version/support file before building the project"
+SET(SOURCE_FILES_TARGET
+    ${CMAKE_SOURCE_DIR}/src/target/api.cc
 )
-add_custom_target(always_generate_files ALL DEPENDS always-run)
 
 #########
 # XKOMP #
@@ -50,14 +44,16 @@ add_custom_target(always_generate_files ALL DEPENDS always-run)
 # XKOMP Lib
 add_custom_target( omp  ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libomp.so)
 add_custom_target(iomp5 ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libiomp5.so)
-
 add_library(${XKOMP}  SHARED ${SOURCE_FILES})
-# add_library(omptarget SHARED ${SOURCE_FILES_TARGET})
 
-add_dependencies(${XKOMP} always_generate_files)
+# XKOMP target lib
+add_custom_target(omptarget ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}target.so libomptarget.so)
+add_library(${XKOMP}target SHARED ${SOURCE_FILES_TARGET})
 
+# flags
 if(UNIX AND NOT APPLE)
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
+    target_link_options(${XKOMP}        PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
+    target_link_options(${XKOMP}target  PRIVATE "-Wl,--version-script=${VERSION_SCRIPT_TARGET}")
 endif()
 
 # Include directory
