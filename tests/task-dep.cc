@@ -7,6 +7,9 @@ main(void)
     {
         # pragma omp single
         {
+            int x = 0;
+            int y = 0;
+
             # pragma omp task depend(out: x)
                 puts("Hello");
 

@@ -2,7 +2,9 @@ VERSION {
     global:
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
+        __kmpc_omp_task_alloc_with_deps;
         __kmpc_omp_target_task_alloc;
+        __kmpc_omp_target_task_alloc_with_deps;
         __kmpc_omp_task;
         __kmpc_omp_task_with_deps;
         __kmpc_omp_taskwait;

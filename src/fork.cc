@@ -196,7 +196,7 @@ __kmpc_fork_call(
         omp->runtime.team_create(&omp->team);
     }
     assert(omp->team.priv.threads != NULL);
-    assert(omp->team.priv.nthreads == nthreads);
+    assert(nthreads == 0 || omp->team.priv.nthreads == nthreads);
     assert(omp->team.desc.args && argc <= TEAM_MAX_ARGS);
 
     // copy parallel region routine arguments

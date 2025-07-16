@@ -227,9 +227,12 @@ typedef struct kmp_depend_info {
   intptr_t base_addr;
   size_t len;
   struct {
-    bool in : 1;
-    bool out : 1;
-    bool mtx : 1;
+      bool in : 1;
+      bool out : 1;
+      bool mtx : 1;
+      bool set : 1;
+      bool unused : 3;
+      bool all : 1;
   } flags;
 } kmp_depend_info_t;
 

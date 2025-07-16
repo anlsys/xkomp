@@ -5,6 +5,14 @@
 
 # include <assert.h>
 
+// task args
+typedef struct  task_args_t
+{
+    task_t * task;
+    size_t task_size;
+    // followed by the kmp task
+}               task_args_t;
+
 // see llvm impl
 const size_t
 round_up_to_val(size_t size, size_t val)
@@ -13,44 +21,54 @@ round_up_to_val(size_t size, size_t val)
     {
         size &= ~(val - 1);
         if (size <= SIZE_MAX - val)
-        {
             size += val;
-        }
     }
     return size;
 }
 
-constexpr int AC = 0;
-constexpr task_flag_bitfield_t xkflags = TASK_FLAG_ZERO;
-constexpr size_t task_size      = task_compute_size(xkflags, AC);
+# pragma message(TODO "LLVM Clang do not provide information on dependencies when allocating the task descriptor :-( Thats because in the original Intel implementation, accesses are not allocated within the task descriptor but seperately, with one alloc per dependency later. XKaapi requires the number of accesses performed by the task when allocating the descriptor.")
 
 extern "C"
 kmp_task_t *
-__kmpc_omp_task_alloc(
+__kmpc_omp_task_alloc_with_deps(
     ident_t * loc_ref,
     kmp_int32 gtid,
     kmp_int32 flags,
     size_t sizeof_kmp_task_t,
     size_t sizeof_shareds,
-    kmp_routine_entry_t task_entry
+    kmp_routine_entry_t task_entry,
+    kmp_int32 ndeps
 ) {
+    assert(ndeps <= TASK_MAX_ACCESSES);
+
     xkrt_thread_t * thread = xkrt_thread_t::get_tls();
     assert(thread);
 
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
+    task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
+    if (ndeps)
+        xkflags |= TASK_FLAG_DEPENDENT;
+    const size_t task_size = task_compute_size(xkflags, ndeps);
+
     // see llvm impl
-    const size_t args_size      = sizeof_kmp_task_t;
+    const size_t args_size      = sizeof(task_args_t) + sizeof_kmp_task_t;
     const size_t total_size     = task_size + args_size;
     const size_t shareds_offset = round_up_to_val(total_size, sizeof(void *));
     assert(shareds_offset >= total_size);
     assert(shareds_offset % sizeof(void *) == 0);
 
     task_t * task = thread->allocate_task(shareds_offset + sizeof_shareds);
-    new(task) task_t(xkomp->task_format, xkflags);
+    assert(task);
+    new (task) task_t(xkomp->task_format, xkflags);
 
-    kmp_task_t * ktask = (kmp_task_t *) TASK_ARGS(task, task_size);
+    task_args_t * args = (task_args_t *) TASK_ARGS(task, task_size);
+    assert(args);
+    args->task      = task;
+    args->task_size = task_size;
+
+    kmp_task_t * ktask = (kmp_task_t *) (args + 1);
     assert(ktask);
 
     ktask->shareds = (sizeof_shareds > 0) ? ((char *) task) + shareds_offset : NULL;
@@ -66,14 +84,15 @@ __kmpc_omp_task_alloc(
 
 extern "C"
 kmp_task_t *
-__kmpc_omp_target_task_alloc(
+__kmpc_omp_target_task_alloc_with_deps(
     ident_t * loc_ref,
     kmp_int32 gtid,
     kmp_int32 flags,
     size_t sizeof_kmp_task_t,
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry,
-    kmp_int64 device_id
+    kmp_int64 device_id,
+    kmp_int32 ndeps
 ) {
     kmp_tasking_flags_t & input_flags = reinterpret_cast<kmp_tasking_flags_t &>(flags);
 
@@ -83,7 +102,48 @@ __kmpc_omp_target_task_alloc(
     input_flags.tiedness = TASK_UNTIED;
     // input_flags.target = 1;
 
-    return __kmpc_omp_task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry);
+    return __kmpc_omp_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps);
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_target_task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_int32 flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int64 device_id
+) {
+    return __kmpc_omp_target_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, device_id, 0);
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_int32 flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry
+) {
+    return __kmpc_omp_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, 0);
+}
+
+static inline
+task_t * task_from_ktask(kmp_task_t * ktask)
+{
+    assert(ktask);
+
+    task_args_t * args = (task_args_t *) (((char *) ktask) - sizeof(task_args_t));
+    assert(args);
+    assert((void *)(args + 1) == (void *) ktask);
+    assert(args->task);
+    // assert(TASK_ARGS(args->task) == (void *) args);
+
+    return args->task;
 }
 
 extern "C"
@@ -93,9 +153,7 @@ __kmpc_omp_task(
     kmp_int32 gtid,
     kmp_task_t * ktask
 ) {
-    task_t * task = (task_t *) (((char *) ktask) - task_size);
-    assert(task);
-    assert(TASK_ARGS(task) == (void *) ktask);
+    task_t * task = task_from_ktask(ktask);
 
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
@@ -105,13 +163,11 @@ __kmpc_omp_task(
     return 0;
 }
 
-extern "C"
-
 /*!
 @ingroup TASKING
 @param loc_ref location of the original task directive
 @param gtid Global Thread ID of encountering thread
-@param new_task task thunk allocated by __kmp_omp_task_alloc() for the ''new
+@param ktask task thunk allocated by __kmp_omp_task_alloc() for the ''new
 task''
 @param ndeps Number of depend items with possible aliasing
 @param dep_list List of depend items with possible aliasing
@@ -126,16 +182,70 @@ Schedule a non-thread-switchable task with dependences for execution
 extern "C"
 kmp_int32
 __kmpc_omp_task_with_deps(
-        ident_t * loc_ref,
-        kmp_int32 gtid,
-        kmp_task_t * new_task,
-        kmp_int32 ndeps,
-        kmp_depend_info_t * dep_list,
-        kmp_int32 ndeps_noalias,
-        kmp_depend_info_t * noalias_dep_list
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_task_t * ktask,
+    kmp_int32 ndeps,
+    kmp_depend_info_t * dep_list,
+    kmp_int32 ndeps_noalias,
+    kmp_depend_info_t * noalias_dep_list
 ) {
-    LOGGER_NOT_IMPLEMENTED();
-    return 0;
+    assert(ndeps <= TASK_MAX_ACCESSES);
+    task_t * task = task_from_ktask(ktask);
+
+    if (ndeps)
+    {
+        task_dep_info_t * dep = TASK_DEP_INFO(task);
+        new (dep) task_dep_info_t(ndeps);
+
+        // set accesses
+        access_t * accesses = TASK_ACCESSES(task);
+        for (int i = 0; i < ndeps ; ++i)
+        {
+            const void * ptr = (const void *) dep_list[i].base_addr;
+            if (ptr)
+            {
+                access_mode_t           mode        = ACCESS_MODE_V;
+                access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+                access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
+
+                if (dep_list[i].flags.in)
+                {
+                    mode |= ACCESS_MODE_R;
+                }
+                if (dep_list[i].flags.out)
+                {
+                    mode |= ACCESS_MODE_W;
+                }
+                if (dep_list[i].flags.mtx)
+                {
+                    mode |= ACCESS_MODE_W;  // TODO: is that needed ?
+                    concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
+                }
+                if (dep_list[i].flags.set)
+                {
+                    mode |= ACCESS_MODE_W;  // TODO: is that needed ?
+                    concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+                }
+                if (dep_list[i].flags.all)
+                {
+                    LOGGER_FATAL("Not implemented");
+                }
+
+                new (accesses + i) access_t(task, ptr, mode, concurrency, scope);
+            }
+        }
+
+        // process deps
+        xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+        assert(thread);
+        thread->resolve(task, accesses, ndeps);
+    }
+
+    xkomp->runtime.task_commit(task);
+
+    # define TASK_CURRENT_QUEUED 1
+    return TASK_CURRENT_QUEUED;
 }
 
 extern "C"
