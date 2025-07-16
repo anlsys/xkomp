@@ -13,8 +13,12 @@ main(void)
             # pragma omp task depend(out: x)
                 puts("Hello");
 
-            # pragma omp task depend(in: y)
+            # pragma omp task depend(in: x) depend(out: y)
                 puts("world");
+
+
+            # pragma omp task depend(in: y)
+                puts("!");
 
             # pragma omp taskwait
         }

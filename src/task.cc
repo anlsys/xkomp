@@ -132,8 +132,20 @@ __kmpc_omp_task_alloc(
     return __kmpc_omp_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, 0);
 }
 
-static inline
-task_t * task_from_ktask(kmp_task_t * ktask)
+static inline kmp_task_t *
+ktask_from_task(task_t * task)
+{
+    task_args_t * args = (task_args_t *) TASK_ARGS(task);
+    assert(args);
+
+    kmp_task_t * ktask = (kmp_task_t *) (args + 1);
+    assert(ktask);
+
+    return ktask;
+}
+
+static inline task_t *
+task_from_ktask(kmp_task_t * ktask)
 {
     assert(ktask);
 
@@ -262,7 +274,7 @@ __kmpc_omp_taskwait(
 static void
 body_omp_task(task_t * task)
 {
-    kmp_task_t * ktask = (kmp_task_t *) TASK_ARGS(task);
+    kmp_task_t * ktask = ktask_from_task(task);
     assert(ktask);
 
     ktask->routine(0, ktask);
