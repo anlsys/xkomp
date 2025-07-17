@@ -45,7 +45,7 @@ add_library(${XKOMP}  SHARED ${SOURCE_FILES})
 
 # flags
 if(UNIX AND NOT APPLE)
-    target_link_options(${XKOMP}        PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
+    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
 endif()
 
 # Include directory
@@ -53,7 +53,10 @@ include_directories(include/)
 include_directories(include/xkomp)
 include_directories(src/)
 
-install(FILES   omp iomp5          DESTINATION lib)
+install(TARGETS ${XKOMP}                              LIBRARY DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libomp.so           DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libiomp5.so         DESTINATION lib)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h*")
 
 ###############
 # DEPENDENCES #
