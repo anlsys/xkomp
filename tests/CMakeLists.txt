@@ -10,7 +10,7 @@ find_package(XKRT   REQUIRED)
 find_package(OpenMP REQUIRED)
 
 # list of tests
-set(TEST_SOURCES parallel.cc parallel-for.cc target.cc task.cc)
+set(TEST_SOURCES parallel.cc parallel-for.cc target.cc task.cc task-dep.cc)
 
 # Loop over each test source file
 foreach(TEST_FILE ${TEST_SOURCES})

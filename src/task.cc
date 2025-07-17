@@ -178,6 +178,7 @@ __kmpc_omp_target_task_alloc(
     kmp_routine_entry_t task_entry,
     kmp_int64 device_id
 ) {
+    LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
     constexpr kmp_int32 ndeps = 0;
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, device_id);
 }
@@ -192,6 +193,7 @@ __kmpc_omp_task_alloc(
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry
 ) {
+    LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
     constexpr kmp_int32 ndeps = 0;
     constexpr kmp_int32 device_id = -1;
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, device_id);
@@ -283,12 +285,12 @@ __kmpc_omp_task_with_deps(
                 }
                 if (dep_list[i].flags.mtx)
                 {
-                    mode |= ACCESS_MODE_W;  // TODO: is that needed ?
+                    mode |= ACCESS_MODE_W;
                     concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
                 }
                 if (dep_list[i].flags.set)
                 {
-                    mode |= ACCESS_MODE_W;  // TODO: is that needed ?
+                    mode |= ACCESS_MODE_W;
                     concurrency = ACCESS_CONCURRENCY_CONCURRENT;
                 }
                 if (dep_list[i].flags.all)
