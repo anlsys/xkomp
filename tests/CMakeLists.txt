@@ -20,7 +20,7 @@ foreach(TEST_FILE ${TEST_SOURCES})
 
     # Create test
     add_executable(${TEST_NAME} ${TEST_FILE})
-    target_link_libraries(${TEST_NAME} PRIVATE ${XKOMP_LIBRARIES} ${XKRT_LIBRARIES} ${HWLOC_LIBRARIES} OpenMP::OpenMP_CXX)
+    target_link_libraries(${TEST_NAME} PRIVATE ${XKOMP} ${XKRT_LIBRARIES} ${HWLOC_LIBRARIES} OpenMP::OpenMP_CXX)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
 
 endforeach()

@@ -16,6 +16,7 @@ xkomp_get(void)
         xkrt_init(&xkomp->runtime);
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
+        xkomp_target_init(xkomp);
     }
 
     return xkomp;
@@ -63,4 +64,11 @@ omp_get_max_threads(void)
 {
     xkomp_t * omp = xkomp_get();
     return MIN(omp->env.OMP_NUM_THREADS, omp->env.OMP_THREAD_LIMIT);
+}
+
+extern "C"
+double
+omp_get_wtime(void)
+{
+    return xkrt_get_nanotime() / 1.0e9;
 }

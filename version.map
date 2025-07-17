@@ -15,6 +15,7 @@ VERSION {
         __kmpc_push_num_threads;
         __kmpc_single;
         __kmpc_end_single;
+        __kmpc_fork_teams;
 
         omp_get_thread_num;
         omp_get_num_threads;
@@ -26,6 +27,14 @@ VERSION {
         omp_get_device_num;
         omp_get_initial_device;
         omp_is_initial_device;
+
+        omp_get_wtime;
+
+        __tgt_register_lib;
+        __tgt_unregister_lib;
+        __tgt_target_kernel;
+        __tgt_target_data_begin_mapper;
+        __tgt_target_data_end_mapper;
 
     local:
         *;

@@ -8,8 +8,7 @@ SET(XKOMP xkomp)
 project(${XKOMP})
 
 # Version
-set(VERSION_SCRIPT          "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
-set(VERSION_SCRIPT_TARGET   "${CMAKE_CURRENT_SOURCE_DIR}/version-target.map")
+set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
 
 ###############
 # C++ version #
@@ -31,9 +30,6 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/fork.cc
     ${CMAKE_SOURCE_DIR}/src/single.cc
     ${CMAKE_SOURCE_DIR}/src/task.cc
-)
-
-SET(SOURCE_FILES_TARGET
     ${CMAKE_SOURCE_DIR}/src/target/api.cc
 )
 
@@ -46,14 +42,9 @@ add_custom_target( omp  ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOM
 add_custom_target(iomp5 ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libiomp5.so)
 add_library(${XKOMP}  SHARED ${SOURCE_FILES})
 
-# XKOMP target lib
-add_custom_target(omptarget ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}target.so libomptarget.so)
-add_library(${XKOMP}target SHARED ${SOURCE_FILES_TARGET})
-
 # flags
 if(UNIX AND NOT APPLE)
     target_link_options(${XKOMP}        PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
-    target_link_options(${XKOMP}target  PRIVATE "-Wl,--version-script=${VERSION_SCRIPT_TARGET}")
 endif()
 
 # Include directory
@@ -61,8 +52,6 @@ include_directories(include/)
 include_directories(include/xkomp)
 include_directories(src/)
 
-# Installation
-# install(TARGETS ${XKOMP} omptarget DESTINATION lib)
 install(FILES   omp iomp5          DESTINATION lib)
 
 ###############

@@ -2,6 +2,7 @@
 # define __XKOMP_H__
 
 # include <xkrt/xkrt.h>
+# include <xkomp/target.h>
 
 /* environment variables parsed at program starts */
 typedef struct  xkomp_env_t
@@ -28,6 +29,17 @@ typedef struct  xkomp_t
     /* the team of thread for parallel region */
     xkrt_team_t team;
 
+    ////////////// Target mapping /////////////////////
+
+    /// Translation table retrieved from the binary
+    HostEntriesBeginToTransTableTy HostEntriesBeginToTransTable;
+    std::mutex TrlTblMtx;
+    std::vector<EntryTy *> HostEntriesBeginRegistrationOrder;
+
+    /* mapping from host function to device function */
+    HostPtrToTableMapTy HostPtrToTableMap;
+    std::mutex TblMapMtx;
+
 }               xkomp_t;
 
 extern xkomp_t * xkomp;
@@ -38,5 +50,8 @@ void xkomp_env_init(xkomp_env_t * env);
 
 /* save task format */
 void xkomp_task_register_format(xkomp_t * xkomp);
+
+/* init target */
+void xkomp_target_init(xkomp_t * xkomp);
 
 # endif /* __XKOMP_H__ */

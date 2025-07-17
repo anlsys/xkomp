@@ -26,112 +26,6 @@ round_up_to_val(size_t size, size_t val)
     return size;
 }
 
-# pragma message(TODO "LLVM Clang do not provide information on dependencies when allocating the task descriptor :-( Thats because in the original Intel implementation, accesses are not allocated within the task descriptor but seperately, with one alloc per dependency later. XKaapi requires the number of accesses performed by the task when allocating the descriptor.")
-
-extern "C"
-kmp_task_t *
-__kmpc_omp_task_alloc_with_deps(
-    ident_t * loc_ref,
-    kmp_int32 gtid,
-    kmp_int32 flags,
-    size_t sizeof_kmp_task_t,
-    size_t sizeof_shareds,
-    kmp_routine_entry_t task_entry,
-    kmp_int32 ndeps
-) {
-    assert(ndeps <= TASK_MAX_ACCESSES);
-
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
-    assert(thread);
-
-    xkomp_t * xkomp = xkomp_get();
-    assert(xkomp);
-
-    task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
-    if (ndeps)
-        xkflags |= TASK_FLAG_DEPENDENT;
-    const size_t task_size = task_compute_size(xkflags, ndeps);
-
-    // see llvm impl
-    const size_t args_size      = sizeof(task_args_t) + sizeof_kmp_task_t;
-    const size_t total_size     = task_size + args_size;
-    const size_t shareds_offset = round_up_to_val(total_size, sizeof(void *));
-    assert(shareds_offset >= total_size);
-    assert(shareds_offset % sizeof(void *) == 0);
-
-    task_t * task = thread->allocate_task(shareds_offset + sizeof_shareds);
-    assert(task);
-    new (task) task_t(xkomp->task_format, xkflags);
-
-    task_args_t * args = (task_args_t *) TASK_ARGS(task, task_size);
-    assert(args);
-    args->task      = task;
-    args->task_size = task_size;
-
-    kmp_task_t * ktask = (kmp_task_t *) (args + 1);
-    assert(ktask);
-
-    ktask->shareds = (sizeof_shareds > 0) ? ((char *) task) + shareds_offset : NULL;
-    ktask->routine = task_entry;
-    ktask->part_id = 0;
-
-    # ifndef NDEBUG
-    snprintf(task->label, sizeof(task->label), "omp-task");
-    # endif /* NDEBUG */
-
-    return ktask;
-}
-
-extern "C"
-kmp_task_t *
-__kmpc_omp_target_task_alloc_with_deps(
-    ident_t * loc_ref,
-    kmp_int32 gtid,
-    kmp_int32 flags,
-    size_t sizeof_kmp_task_t,
-    size_t sizeof_shareds,
-    kmp_routine_entry_t task_entry,
-    kmp_int64 device_id,
-    kmp_int32 ndeps
-) {
-    kmp_tasking_flags_t & input_flags = reinterpret_cast<kmp_tasking_flags_t &>(flags);
-
-    // target task is untied defined in the specification
-    # define TASK_UNTIED    0
-    # define TASK_TIED      1
-    input_flags.tiedness = TASK_UNTIED;
-    // input_flags.target = 1;
-
-    return __kmpc_omp_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps);
-}
-
-extern "C"
-kmp_task_t *
-__kmpc_omp_target_task_alloc(
-    ident_t * loc_ref,
-    kmp_int32 gtid,
-    kmp_int32 flags,
-    size_t sizeof_kmp_task_t,
-    size_t sizeof_shareds,
-    kmp_routine_entry_t task_entry,
-    kmp_int64 device_id
-) {
-    return __kmpc_omp_target_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, device_id, 0);
-}
-
-extern "C"
-kmp_task_t *
-__kmpc_omp_task_alloc(
-    ident_t * loc_ref,
-    kmp_int32 gtid,
-    kmp_int32 flags,
-    size_t sizeof_kmp_task_t,
-    size_t sizeof_shareds,
-    kmp_routine_entry_t task_entry
-) {
-    return __kmpc_omp_task_alloc_with_deps(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, 0);
-}
-
 static inline kmp_task_t *
 ktask_from_task(task_t * task)
 {
@@ -158,6 +52,151 @@ task_from_ktask(kmp_task_t * ktask)
     return args->task;
 }
 
+static inline void
+ktask_wrapper_launch(kmp_task_t * ktask)
+{
+    ktask->routine(0, ktask);
+}
+
+static inline void
+body_omp_task(task_t * task)
+{
+    kmp_task_t * ktask = ktask_from_task(task);
+    assert(ktask);
+
+    return ktask_wrapper_launch(ktask);
+}
+
+inline static kmp_task *
+task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_tasking_flags_t flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int32 ndeps,
+    kmp_int32 device_id
+) {
+    // there is a '1' offset between omp device id and xkaapi device id
+    static_assert(HOST_DEVICE_GLOBAL_ID == 0);
+    xkrt_device_global_id_t device_global_id = (device_id == -1) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
+
+    assert(ndeps <= TASK_MAX_ACCESSES);
+
+    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    assert(thread);
+
+    xkomp_t * xkomp = xkomp_get();
+    assert(xkomp);
+
+    task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
+    if (ndeps)
+        xkflags |= TASK_FLAG_DEPENDENT;
+    if (device_global_id != HOST_DEVICE_GLOBAL_ID)
+        xkflags |= TASK_FLAG_DEVICE;
+    const size_t task_size = task_compute_size(xkflags, ndeps);
+
+    // see llvm impl
+    const size_t args_size      = sizeof(task_args_t) + sizeof_kmp_task_t;
+    const size_t total_size     = task_size + args_size;
+    const size_t shareds_offset = round_up_to_val(total_size, sizeof(void *));
+    assert(shareds_offset >= total_size);
+    assert(shareds_offset % sizeof(void *) == 0);
+
+    task_t * task = thread->allocate_task(shareds_offset + sizeof_shareds);
+    assert(task);
+    new (task) task_t(xkomp->task_format, xkflags);
+
+    task_args_t * args = (task_args_t *) TASK_ARGS(task, task_size);
+    assert(args);
+    args->task      = task;
+    args->task_size = task_size;
+
+    if (xkflags & TASK_FLAG_DEVICE)
+    {
+        task_dev_info_t * dev = TASK_DEV_INFO(task);
+        new (dev) task_dev_info_t(device_global_id, UNSPECIFIED_TASK_ACCESS);
+    }
+
+    kmp_task_t * ktask = (kmp_task_t *) (args + 1);
+    assert(ktask);
+
+    ktask->shareds = (sizeof_shareds > 0) ? ((char *) task) + shareds_offset : NULL;
+    ktask->routine = task_entry;
+    ktask->part_id = 0;
+
+    # ifndef NDEBUG
+    snprintf(task->label, sizeof(task->label), "omp-task");
+    # endif /* NDEBUG */
+
+    return ktask;
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_task_alloc_with_deps(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_tasking_flags_t flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int32 ndeps
+) {
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, -1);
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_target_task_alloc_with_deps(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_tasking_flags_t flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int64 device_id,
+    kmp_int32 ndeps
+) {
+    // target task is untied defined in the specification
+    # define TASK_UNTIED    0
+    # define TASK_TIED      1
+    flags.tiedness = TASK_UNTIED;
+
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, device_id);
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_target_task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_tasking_flags_t flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry,
+    kmp_int64 device_id
+) {
+    constexpr kmp_int32 ndeps = 0;
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, device_id);
+}
+
+extern "C"
+kmp_task_t *
+__kmpc_omp_task_alloc(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_tasking_flags_t flags,
+    size_t sizeof_kmp_task_t,
+    size_t sizeof_shareds,
+    kmp_routine_entry_t task_entry
+) {
+    constexpr kmp_int32 ndeps = 0;
+    constexpr kmp_int32 device_id = -1;
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, device_id);
+}
+
 extern "C"
 kmp_int32
 __kmpc_omp_task(
@@ -170,6 +209,19 @@ __kmpc_omp_task(
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
+    // TODO: im not sure why we need all that mess, see MPC and LLVM impl to
+    // figure out what's going on with untied tasks
+    /* LLVM calls both
+     *  '__kmpc_omp_task' and '__kmpc_omp_task_with_deps'
+     * if a task is untied and has dependences.
+     * In such case, the task was already commit in the previous call to
+     * '__kmpc_omp_task_with_deps'
+     */
+    if (task->state.value == TASK_STATE_READY)
+    {
+        body_omp_task(task);
+        return 1;
+    }
     xkomp->runtime.task_commit(task);
 
     return 0;
@@ -256,7 +308,8 @@ __kmpc_omp_task_with_deps(
 
     xkomp->runtime.task_commit(task);
 
-    # define TASK_CURRENT_QUEUED 1
+    # define TASK_CURRENT_NOT_QUEUED    0
+    # define TASK_CURRENT_QUEUED        1
     return TASK_CURRENT_QUEUED;
 }
 
@@ -271,21 +324,13 @@ __kmpc_omp_taskwait(
     return 0;
 }
 
-static void
-body_omp_task(task_t * task)
-{
-    kmp_task_t * ktask = ktask_from_task(task);
-    assert(ktask);
-
-    ktask->routine(0, ktask);
-}
-
 void
 xkomp_task_register_format(xkomp_t * xkomp)
 {
     task_format_t format;
     memset(format.f, 0, sizeof(format.f));
     format.f[TASK_FORMAT_TARGET_HOST] = (task_format_func_t) body_omp_task;
+    format.f[TASK_FORMAT_TARGET_CUDA] = (task_format_func_t) body_omp_task;
     snprintf(format.label, sizeof(format.label), "omp-task");
     xkomp->task_format = task_format_create(&(xkomp->runtime.formats.list), &format);
 }
