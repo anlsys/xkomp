@@ -1,8 +1,10 @@
 # include <xkomp/xkomp.h>
+# include <xkomp/support.h>
 
 # include <xkrt/logger/logger.h>
-# include <kmp.h>
 # include <stdint.h>
+
+# include "kmp.h"
 
 xkomp_t  _xkomp;
 xkomp_t * xkomp;
@@ -16,7 +18,9 @@ xkomp_get(void)
         xkrt_init(&xkomp->runtime);
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
+        # if XKOMP_SUPPORT_TARGET
         xkomp_target_init(xkomp);
+        # endif /* XKOMP_SUPPORT_TARGET */
     }
 
     return xkomp;

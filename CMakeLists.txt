@@ -10,12 +10,31 @@ project(${XKOMP})
 # Version
 set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
 
+###########
+# OPTIONS #
+###########
+
+option(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
+
+include(BooleanUtils)
+convert_bool(SUPPORT_TARGET)
+
+configure_file(
+    ${CMAKE_SOURCE_DIR}/include/xkomp/support.h.in
+    ${CMAKE_SOURCE_DIR}/include/xkomp/support.h
+)
+
 ###############
 # C++ version #
 ###############
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
+
+# if target is enabled, to avoid compilation error due to missing llvm install feature
+if (SUPPORT_TARGET)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
+endif()
 
 ###############
 # DEPENDENCES #
@@ -30,9 +49,14 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/fork.cc
     ${CMAKE_SOURCE_DIR}/src/master.cc
     ${CMAKE_SOURCE_DIR}/src/single.cc
-    ${CMAKE_SOURCE_DIR}/src/target/api.cc
     ${CMAKE_SOURCE_DIR}/src/task.cc
 )
+
+# if target is enabled, add sources
+if (SUPPORT_TARGET)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/target/api.cc)
+endif()
+
 
 #########
 # XKOMP #
@@ -67,10 +91,24 @@ find_package(XKRT REQUIRED)
 include_directories("${XKRT_INCLUDE_DIRS}")
 target_link_libraries(${XKOMP} PRIVATE ${XKRT_LIBRARIES})
 
-# # LLVM includes
-# find_package(LLVM REQUIRED)
-# include_directories("${LLVM_INCLUDE_DIRS}/llvm/include")
-# include_directories("${LLVM_INCLUDE_DIRS}/offload/include")
+# Target requires an LLVM install
+if (SUPPORT_TARGET)
+    find_package(LLVM REQUIRED CONFIG)
+    include_directories(${LLVM_INCLUDE_DIRS})
+    add_definitions(${LLVM_DEFINITIONS})
+
+    # Link to desired LLVM components
+    llvm_map_components_to_libnames(LLVM_LIBS
+        Core
+        Object
+        # ObjectOffload
+        Support
+        IRReader
+    )
+
+    target_link_libraries(${XKOMP} PRIVATE ${LLVM_LIBS})
+
+endif()
 
 ################
 # Sub projects #

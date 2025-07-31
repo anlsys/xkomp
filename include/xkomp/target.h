@@ -3,6 +3,7 @@
 
 # include <map>
 # include <vector>
+# include <memory>
 
 struct EntryTy {
     void *Address;       // Pointer to the function
@@ -122,5 +123,63 @@ typedef std::map<void *, TableMap> HostPtrToTableMapTy;
 
 # define OFFLOAD_SUCCESS    0
 # define OFFLOAD_FAIL       1
+
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/iterator.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/Object/OffloadBinary.h"
+
+/// Return the difference (in bytes) between \p Begin and \p End.
+template <typename Ty = char>
+auto getPtrDiff(const void *End, const void *Begin) {
+  return reinterpret_cast<const Ty *>(End) -
+         reinterpret_cast<const Ty *>(Begin);
+}
+
+class DeviceImageTy {
+
+    std::unique_ptr<llvm::object::OffloadBinary> Binary;
+
+    __tgt_bin_desc *BinaryDesc;
+    __tgt_device_image Image;
+
+    public:
+        DeviceImageTy(
+            __tgt_bin_desc * BinaryDesc,
+            __tgt_device_image & TgtDeviceImage
+        ) :
+            BinaryDesc(BinaryDesc),
+            Image(TgtDeviceImage)
+        {
+            llvm::StringRef ImageStr(
+                static_cast<char *>(Image.ImageStart),
+                getPtrDiff(Image.ImageEnd, Image.ImageStart)
+            );
+
+            auto BinaryOrErr = llvm::object::OffloadBinary::create(llvm::MemoryBufferRef(ImageStr, ""));
+
+            if (!BinaryOrErr) {
+                consumeError(BinaryOrErr.takeError());
+                return;
+            }
+
+            Binary = std::move(*BinaryOrErr);
+            void *Begin = const_cast<void *>(
+                    static_cast<const void *>(Binary->getImage().bytes_begin()));
+            void *End = const_cast<void *>(
+                    static_cast<const void *>(Binary->getImage().bytes_end()));
+
+            Image = __tgt_device_image{Begin, End, Image.EntriesBegin, Image.EntriesEnd};
+        }
+
+    public:
+        __tgt_device_image &getExecutableImage() { return Image; }
+        __tgt_bin_desc &getBinaryDesc() { return *BinaryDesc; }
+
+    auto entries() {
+        return llvm::make_range(Image.EntriesBegin, Image.EntriesEnd);
+    }
+};
 
 #endif /* __TARGET_H__ */

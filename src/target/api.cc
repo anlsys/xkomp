@@ -11,36 +11,39 @@
 
 /// Find the table information in the map or look it up in the translation
 /// tables.
-TableMap *
+static inline TableMap *
 getTableMap(xkomp_t * xkomp, void * HostPtr)
 {
-    std::lock_guard<std::mutex> TblMapLock(xkomp->TblMapMtx);
-    HostPtrToTableMapTy::iterator TableMapIt = xkomp->HostPtrToTableMap.find(HostPtr);
+    std::lock_guard<std::mutex> TblMapLock(xkomp->PM.TblMapMtx);
+    HostPtrToTableMapTy::iterator TableMapIt = xkomp->PM.HostPtrToTableMap.find(HostPtr);
 
-    if (TableMapIt != xkomp->HostPtrToTableMap.end())
+    if (TableMapIt != xkomp->PM.HostPtrToTableMap.end())
         return &TableMapIt->second;
 
     // We don't have a map. So search all the registered libraries.
     TableMap *TM = nullptr;
-    std::lock_guard<std::mutex> TrlTblLock(xkomp->TrlTblMtx);
-    for (HostEntriesBeginToTransTableTy::iterator Itr = xkomp->HostEntriesBeginToTransTable.begin();
-            Itr != xkomp->HostEntriesBeginToTransTable.end(); ++Itr) {
+    std::lock_guard<std::mutex> TrlTblLock(xkomp->PM.TrlTblMtx);
+    for (HostEntriesBeginToTransTableTy::iterator Itr = xkomp->PM.HostEntriesBeginToTransTable.begin();
+            Itr != xkomp->PM.HostEntriesBeginToTransTable.end(); ++Itr)
+    {
         // get the translation table (which contains all the good info).
         TranslationTable *TransTable = &Itr->second;
         // iterate over all the host table entries to see if we can locate the
         // host_ptr.
         EntryTy *Cur = TransTable->HostTable.EntriesBegin;
-        for (uint32_t I = 0; Cur < TransTable->HostTable.EntriesEnd; ++Cur, ++I) {
+        for (uint32_t I = 0; Cur < TransTable->HostTable.EntriesEnd; ++Cur, ++I)
+        {
             if (Cur->Address != HostPtr)
                 continue;
             // we got a match, now fill the HostPtrToTableMap so that we
             // may avoid this search next time.
-            TM = &(xkomp->HostPtrToTableMap)[HostPtr];
+            TM = &(xkomp->PM.HostPtrToTableMap)[HostPtr];
             TM->Table = TransTable;
             TM->Index = I;
             return TM;
         }
     }
+
     return nullptr;
 }
 
@@ -74,7 +77,7 @@ target(
     // get target table.
     __tgt_target_table *TargetTable = nullptr;
     {
-        std::lock_guard<std::mutex> TrlTblLock(xkomp->TrlTblMtx);
+        std::lock_guard<std::mutex> TrlTblLock(xkomp->PM.TrlTblMtx);
         assert(TM->Table->TargetsTable.size() > (size_t)DeviceId &&
                 "Not expecting a device ID outside the table's bounds!");
         TargetTable = TM->Table->TargetsTable[DeviceId];
@@ -183,7 +186,6 @@ __tgt_target_kernel(
 ) {
     if (KernelArgs->Flags.NoWait)
         LOGGER_FATAL("impl me");
-    LOGGER_NOT_IMPLEMENTED();
 
     if (NumTeams == -1)
         KernelArgs->NumTeams[0] = NumTeams = 1;
@@ -233,7 +235,178 @@ extern "C"
 void
 __tgt_register_lib(__tgt_bin_desc * desc)
 {
-    LOGGER_NOT_IMPLEMENTED();
+    ////////////////////////////////
+    // PluginManager::registerLib //
+    ////////////////////////////////
+
+    xkomp_t * xkomp = xkomp_get();
+
+    # if 0
+    xkomp->PM.RTLsMtx.lock();
+
+    // Upgrade the entries from the legacy implementation if necessary.
+    desc = upgradeLegacyEntries(desc);
+
+    // Add in all the OpenMP requirements associated with this binary.
+    for (llvm::offloading::EntryTy &Entry :
+            llvm::make_range(desc->HostEntriesBegin, desc->HostEntriesEnd))
+        if (Entry.Kind == object::OffloadKind::OFK_OpenMP &&
+                Entry.Flags == OMP_REGISTER_REQUIRES)
+            xkomp->PM.addRequirements(Entry.Data);
+    # endif
+
+    // Extract the executable image and extra information if available.
+    for (int32_t i = 0; i < desc->NumDeviceImages; ++i)
+        xkomp->PM.DeviceImages.push_back(std::make_unique<DeviceImageTy>(desc, desc->DeviceImages[i]));
+
+    // Register the images with the RTLs that understand them, if any.
+    for (int32_t i = 0; i < desc->NumDeviceImages; ++i)
+    {
+        // Obtain the image and information that was previously extracted.
+        __tgt_device_image *Img = &desc->DeviceImages[i];
+
+        // if we found an XKaapi driver that supports this image
+        LOGGER_WARN("Currently stupidly registering the image for all devices, without checking compatibility, just to get stuff running");
+        bool found_driver = true;
+
+        unsigned int ndevices = xkomp->runtime.get_ndevices();
+        static_assert(HOST_DEVICE_GLOBAL_ID == 0);
+        for (xkrt_device_global_id_t device_global_id = 1 ; device_global_id < ndevices ; ++device_global_id)
+        {
+            // Initialize (if necessary) translation table for this library.
+            xkomp->PM.TrlTblMtx.lock();
+            if (!xkomp->PM.HostEntriesBeginToTransTable.count(desc->HostEntriesBegin))
+            {
+                xkomp->PM.HostEntriesBeginRegistrationOrder.push_back(desc->HostEntriesBegin);
+                TranslationTable &TT      = (xkomp->PM.HostEntriesBeginToTransTable)[desc->HostEntriesBegin];
+                TT.HostTable.EntriesBegin = desc->HostEntriesBegin;
+                TT.HostTable.EntriesEnd   = desc->HostEntriesEnd;
+            }
+
+            // Retrieve translation table for this library.
+            TranslationTable &TT = (xkomp->PM.HostEntriesBeginToTransTable)[desc->HostEntriesBegin];
+
+            int omp_device_id = (int) (device_global_id - 1);
+            if (TT.TargetsTable.size() < static_cast<size_t>(omp_device_id + 1))
+            {
+                TT.DeviceTables.resize(omp_device_id + 1, {});
+                TT.TargetsImages.resize(omp_device_id + 1, nullptr);
+                TT.TargetsEntries.resize(omp_device_id + 1, {});
+                TT.TargetsTable.resize(omp_device_id + 1, nullptr);
+            }
+
+            // Register the image for this target type and invalidate the table.
+            TT.TargetsImages[omp_device_id] = Img;
+            TT.TargetsTable[omp_device_id]  = nullptr;
+
+            # if 0
+            xkomp->PM.UsedImages.insert(Img);
+            # endif
+
+            xkomp->PM.TrlTblMtx.unlock();
+        }
+
+        # if 0
+        // foreach driver
+        for (uint8_t driver_type = 0 ; driver_type < XKRT_DRIVER_TYPE_MAX ; ++driver_type)
+        {
+            xkrt_driver_t * driver = xkomp->runtime.driver_get((xkrt_driver_type_t) driver_type);
+            if (driver == NULL)
+                continue ;
+
+            found_driver = true;
+
+            // TODO: should also filter per device here, as the same image may
+            // not execute on all devices of the same driver
+
+        }
+            # endif
+
+    # if 0
+        GenericPluginTy *FoundRTL = nullptr;
+
+        // Scan the RTLs that have associated images until we find one that supports
+        // the current image.
+        for (auto &R : plugins()) {
+            if (!R.is_plugin_compatible(Img))
+                continue;
+
+            if (!initializePlugin(R))
+                continue;
+
+            if (!R.number_of_devices()) {
+                DP("Skipping plugin %s with no visible devices\n", R.getName());
+                continue;
+            }
+
+            for (int32_t DeviceId = 0; DeviceId < R.number_of_devices(); ++DeviceId) {
+                // We only want a single matching image to be registered for each binary
+                // descriptor. This prevents multiple of the same image from being
+                // registered for the same device in the case that they are mutually
+                // compatible, such as sm_80 and sm_89.
+                if (UsedDevices[&R].contains(DeviceId)) {
+                    DP("Image " DPxMOD
+                            " is a duplicate, not loaded on RTL %s device %d!\n",
+                            DPxPTR(Img->ImageStart), R.getName(), DeviceId);
+                    continue;
+                }
+
+                if (!R.is_device_compatible(DeviceId, Img))
+                    continue;
+
+                DP("Image " DPxMOD " is compatible with RTL %s device %d!\n",
+                        DPxPTR(Img->ImageStart), R.getName(), DeviceId);
+
+                if (!initializeDevice(R, DeviceId))
+                    continue;
+
+                // Initialize (if necessary) translation table for this library.
+                xkomp->PM.TrlTblMtx.lock();
+                if (!xkomp->PM.HostEntriesBeginToTransTable.count(desc->HostEntriesBegin)) {
+                    xkomp->PM.HostEntriesBeginRegistrationOrder.push_back(
+                            desc->HostEntriesBegin);
+                    TranslationTable &TT =
+                        (xkomp->PM.HostEntriesBeginToTransTable)[desc->HostEntriesBegin];
+                    TT.HostTable.EntriesBegin = desc->HostEntriesBegin;
+                    TT.HostTable.EntriesEnd = desc->HostEntriesEnd;
+                }
+
+                // Retrieve translation table for this library.
+                TranslationTable &TT =
+                    (xkomp->PM.HostEntriesBeginToTransTable)[desc->HostEntriesBegin];
+
+                DP("Registering image " DPxMOD " with RTL %s!\n",
+                        DPxPTR(Img->ImageStart), R.getName());
+
+                auto UserId = xkomp->PM.DeviceIds[std::make_pair(&R, DeviceId)];
+                if (TT.TargetsTable.size() < static_cast<size_t>(UserId + 1)) {
+                    TT.DeviceTables.resize(UserId + 1, {});
+                    TT.TargetsImages.resize(UserId + 1, nullptr);
+                    TT.TargetsEntries.resize(UserId + 1, {});
+                    TT.TargetsTable.resize(UserId + 1, nullptr);
+                }
+
+                // Register the image for this target type and invalidate the table.
+                TT.TargetsImages[UserId] = Img;
+                TT.TargetsTable[UserId] = nullptr;
+
+                UsedDevices[&R].insert(DeviceId);
+                xkomp->PM.UsedImages.insert(Img);
+                FoundRTL = &R;
+
+                xkomp->PM.TrlTblMtx.unlock();
+            }
+        }
+        # endif
+        if (!found_driver)
+            LOGGER_FATAL("No XKRT driver found for kernel image");
+    }
+
+    # if 0
+    xkomp->PM.RTLsMtx.unlock();
+    #endif
+
+    // LOGGER_FATAL("IMPL ME");
 }
 
 extern "C"
@@ -247,12 +420,9 @@ __tgt_unregister_lib(__tgt_bin_desc * desc)
 void
 xkomp_target_init(xkomp_t * xkomp)
 {
-    new (&xkomp->HostEntriesBeginToTransTable) HostEntriesBeginToTransTableTy();
-    new (&xkomp->TrlTblMtx) std::mutex();
-    new (&xkomp->HostEntriesBeginRegistrationOrder) std::vector<EntryTy *>();
-
-    new (&xkomp->HostPtrToTableMap) HostPtrToTableMapTy();
-    new (&xkomp->TblMapMtx) std::mutex();
+    new (&xkomp->PM.HostEntriesBeginToTransTable) HostEntriesBeginToTransTableTy();
+    new (&xkomp->PM.TrlTblMtx) std::mutex();
+    new (&xkomp->PM.HostEntriesBeginRegistrationOrder) std::vector<EntryTy *>();
+    new (&xkomp->PM.HostPtrToTableMap) HostPtrToTableMapTy();
+    new (&xkomp->PM.TblMapMtx) std::mutex();
 }
-
-

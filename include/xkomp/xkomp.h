@@ -2,7 +2,12 @@
 # define __XKOMP_H__
 
 # include <xkrt/xkrt.h>
-# include <xkomp/target.h>
+
+# include <xkomp/support.h>
+
+# if XKOMP_SUPPORT_TARGET
+#  include <xkomp/target.h>
+# endif /* XKOMP_SUPPORT_TARGET */
 
 /* environment variables parsed at program starts */
 typedef struct  xkomp_env_t
@@ -31,15 +36,30 @@ typedef struct  xkomp_t
 
     ////////////// Target mapping /////////////////////
 
-    /// Translation table retrieved from the binary
-    HostEntriesBeginToTransTableTy HostEntriesBeginToTransTable;
-    std::mutex TrlTblMtx;
-    std::vector<EntryTy *> HostEntriesBeginRegistrationOrder;
+    # if XKOMP_SUPPORT_TARGET
 
-    /* mapping from host function to device function */
-    HostPtrToTableMapTy HostPtrToTableMap;
-    std::mutex TblMapMtx;
+    // Minimal plugin manager adapted from llvm offload
+    struct {
+        /// Translation table retrieved from the binary
+        HostEntriesBeginToTransTableTy HostEntriesBeginToTransTable;
+        std::mutex TrlTblMtx;
+        std::vector<EntryTy *> HostEntriesBeginRegistrationOrder;
 
+        /* mapping from host function to device function */
+        HostPtrToTableMapTy HostPtrToTableMap;
+        std::mutex TblMapMtx;
+
+        /// Executable images and information extracted from the input images passed
+        /// to the runtime.
+        std::vector<std::unique_ptr<DeviceImageTy>> DeviceImages;
+
+        # if 0
+        // set of all device images currently in use.
+        llvm::DenseSet<const __tgt_device_image *> UsedImages;
+        # endif
+
+    } PM;
+    # endif /* XKOMP_SUPPORT_TARGET */
 }               xkomp_t;
 
 extern xkomp_t * xkomp;
