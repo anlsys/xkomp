@@ -2,7 +2,7 @@
 # define __XKOMP_H__
 
 # include <xkrt/xkrt.h>
-# include <xkomp/target.h>
+# include <xkomp/support.h>
 
 /* environment variables parsed at program starts */
 typedef struct  xkomp_env_t
@@ -28,21 +28,11 @@ typedef struct  xkomp_t
 
     /* the team of thread for parallel region */
     xkrt_team_t team;
-
-    ////////////// Target mapping /////////////////////
-
-    /// Translation table retrieved from the binary
-    HostEntriesBeginToTransTableTy HostEntriesBeginToTransTable;
-    std::mutex TrlTblMtx;
-    std::vector<EntryTy *> HostEntriesBeginRegistrationOrder;
-
-    /* mapping from host function to device function */
-    HostPtrToTableMapTy HostPtrToTableMap;
-    std::mutex TblMapMtx;
-
 }               xkomp_t;
 
 extern xkomp_t * xkomp;
+
+extern "C"
 xkomp_t * xkomp_get(void);
 
 /** load env variables */
@@ -51,7 +41,14 @@ void xkomp_env_init(xkomp_env_t * env);
 /* save task format */
 void xkomp_task_register_format(xkomp_t * xkomp);
 
-/* init target */
-void xkomp_target_init(xkomp_t * xkomp);
+# define XKOMP_HACK_TARGET_CALL 1
+# if XKOMP_HACK_TARGET_CALL
+extern "C" {
+    task_t                              * xkomp_current_task(void);
+    xkrt_stream_t                       * xkomp_current_stream(void);
+    xkrt_stream_instruction_t           * xkomp_current_stream_instruction(void);
+    xkrt_stream_instruction_counter_t     xkomp_current_stream_instruction_counter(void);
+};
+# endif /* XKOMP_HACK_TARGET_CALL */
 
 # endif /* __XKOMP_H__ */

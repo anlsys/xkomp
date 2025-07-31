@@ -1,12 +1,15 @@
 # include <xkomp/xkomp.h>
+# include <xkomp/support.h>
+# include <xkomp/kmp.h>
 
 # include <xkrt/logger/logger.h>
-# include <kmp.h>
 # include <stdint.h>
+
 
 xkomp_t  _xkomp;
 xkomp_t * xkomp;
 
+extern "C"
 xkomp_t *
 xkomp_get(void)
 {
@@ -16,7 +19,6 @@ xkomp_get(void)
         xkrt_init(&xkomp->runtime);
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
-        xkomp_target_init(xkomp);
     }
 
     return xkomp;
@@ -26,6 +28,9 @@ extern "C"
 kmp_int32
 __kmpc_global_thread_num(ident_t * loc)
 {
+    (void) loc;
+
+    // ensure runtime is initialized
     xkomp_get();
 
     xkrt_thread_t * tls = xkrt_thread_t::get_tls();

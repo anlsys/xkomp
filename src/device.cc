@@ -1,7 +1,6 @@
 # include <xkrt/logger/logger.h>
 
 # include <assert.h>
-# include <kmp.h>
 
 extern "C"
 void

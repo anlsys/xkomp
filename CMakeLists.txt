@@ -10,6 +10,14 @@ project(${XKOMP})
 # Version
 set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
 
+###########
+# OPTIONS #
+###########
+
+option(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
+include(BooleanUtils)
+convert_bool(SUPPORT_TARGET)
+
 ###############
 # C++ version #
 ###############
@@ -30,9 +38,13 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/fork.cc
     ${CMAKE_SOURCE_DIR}/src/master.cc
     ${CMAKE_SOURCE_DIR}/src/single.cc
-    ${CMAKE_SOURCE_DIR}/src/target/api.cc
     ${CMAKE_SOURCE_DIR}/src/task.cc
 )
+
+# if target is enabled, add sources
+if (SUPPORT_TARGET)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/target/api.cc)
+endif()
 
 #########
 # XKOMP #
@@ -49,28 +61,66 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Include directory
-include_directories(include/)
-include_directories(include/xkomp)
-include_directories(src/)
-
-install(TARGETS ${XKOMP}                              LIBRARY DESTINATION lib)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libomp.so           DESTINATION lib)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libiomp5.so         DESTINATION lib)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h*")
+include_directories(${CMAKE_SOURCE_DIR}/include/)
+include_directories(${CMAKE_BINARY_DIR}/include/)
+include_directories(${CMAKE_SOURCE_DIR}/src/)
 
 ###############
 # DEPENDENCES #
 ###############
 
 # XK Runtime
-find_package(XKRT REQUIRED)
-include_directories("${XKRT_INCLUDE_DIRS}")
-target_link_libraries(${XKOMP} PRIVATE ${XKRT_LIBRARIES})
+find_package(XKRT REQUIRED NO_MODULE)
+target_link_libraries(${XKOMP} PRIVATE XKRT::xkrt)
 
-# # LLVM includes
-# find_package(LLVM REQUIRED)
-# include_directories("${LLVM_INCLUDE_DIRS}/llvm/include")
-# include_directories("${LLVM_INCLUDE_DIRS}/offload/include")
+################
+# INSTALLATION #
+################
+
+# Header file generated
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/xkomp")
+configure_file(
+    ${CMAKE_SOURCE_DIR}/include/xkomp/support.h.in
+    ${CMAKE_BINARY_DIR}/include/xkomp/support.h
+)
+install(
+    FILES "${CMAKE_BINARY_DIR}/include/xkomp/support.h"
+    DESTINATION include/xkomp
+)
+
+# install lib
+install(TARGETS ${XKOMP}                              LIBRARY DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libomp.so           DESTINATION lib)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libiomp5.so         DESTINATION lib)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h*")
+
+# Installation - cmake files
+target_include_directories(${XKOMP} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+install(TARGETS ${XKOMP}
+    EXPORT XKOMPTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include)
+install(DIRECTORY include/ DESTINATION include)
+install(EXPORT XKOMPTargets
+    FILE XKOMPTargets.cmake
+    NAMESPACE XKOMP::
+    DESTINATION lib/cmake/XKOMP)
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    cmake/XKOMPConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/XKOMPConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/XKOMP
+)
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/XKOMPConfig.cmake"
+    DESTINATION lib/cmake/XKOMP
+)
 
 ################
 # Sub projects #

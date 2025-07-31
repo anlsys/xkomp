@@ -1,4 +1,4 @@
-# include <xkomp.h>
+# include <xkomp/xkomp.h>
 
 template <typename T>
 T
