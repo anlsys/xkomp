@@ -5,13 +5,34 @@
 # include <vector>
 # include <memory>
 
+/// This is the record of an object that just be registered with the offloading
+/// runtime.
+# if 0
 struct EntryTy {
-    void *Address;       // Pointer to the function
-    char *name;       // Name of the function
-    size_t size;      // 0 for function
-    int32_t flags;    // OpenMPOffloadingDeclareTargetFlags::OMP_DECLARE_TARGET_FPTR
-    int32_t reserved; // Reserved
+
+  /// Reserved bytes used to detect an older version of the struct, always zero.
+  uint64_t Reserved = 0x0;
+  /// The current version of the struct for runtime forward compatibility.
+  uint16_t Version = 0x1;
+  /// The expected consumer of this entry, e.g. CUDA or OpenMP.
+  uint16_t Kind;
+  /// Flags associated with the global.
+  uint32_t Flags;
+  /// The address of the global to be registered by the runtime.
+  void *Address;
+  /// The name of the symbol in the device image.
+  char *SymbolName;
+  /// The number of bytes the symbol takes.
+  uint64_t Size;
+  /// Extra generic data used to register this entry.
+  uint64_t Data;
+  /// An extra pointer, usually null.
+  void *AuxAddr;
 };
+# else
+# include <llvm/Frontend/Offloading/Utility.h>
+using EntryTy = llvm::offloading::EntryTy;
+# endif
 
 /// This struct is a record of the device image information
 struct __tgt_device_image {

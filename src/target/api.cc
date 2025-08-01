@@ -239,6 +239,7 @@ __tgt_register_lib(__tgt_bin_desc * desc)
     // PluginManager::registerLib //
     ////////////////////////////////
 
+    // this will init the runtime
     xkomp_t * xkomp = xkomp_get();
 
     # if 0
