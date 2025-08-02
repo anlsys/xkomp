@@ -52,19 +52,32 @@ task_from_ktask(kmp_task_t * ktask)
     return args->task;
 }
 
-static inline void
-ktask_wrapper_launch(kmp_task_t * ktask)
-{
-    ktask->routine(0, ktask);
-}
-
+// called from a non-device thread
 static inline void
 body_omp_task(task_t * task)
 {
+    constexpr int32_t gtid = 0;
     kmp_task_t * ktask = ktask_from_task(task);
     assert(ktask);
 
-    return ktask_wrapper_launch(ktask);
+    ktask->routine(gtid, ktask);
+}
+
+// called from a device thread
+static inline void
+body_omp_task_target(
+    xkrt_stream_t * stream,
+    xkrt_stream_instruction_t * instr,
+    xkrt_stream_instruction_counter_t idx
+) {
+    task_t * task = (task_t *) instr->kern.vargs;
+    assert(task);
+
+    constexpr int32_t gtid = 0;
+    kmp_task_t * ktask = ktask_from_task(task);
+    assert(ktask);
+
+    ktask->routine(gtid, ktask);
 }
 
 inline static kmp_task *
@@ -332,7 +345,7 @@ xkomp_task_register_format(xkomp_t * xkomp)
     task_format_t format;
     memset(format.f, 0, sizeof(format.f));
     format.f[TASK_FORMAT_TARGET_HOST] = (task_format_func_t) body_omp_task;
-    format.f[TASK_FORMAT_TARGET_CUDA] = (task_format_func_t) body_omp_task;
+    format.f[TASK_FORMAT_TARGET_CUDA] = (task_format_func_t) body_omp_task_target;
     snprintf(format.label, sizeof(format.label), "omp-task");
     xkomp->task_format = task_format_create(&(xkomp->runtime.formats.list), &format);
 }
