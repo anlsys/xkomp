@@ -36,6 +36,8 @@ VERSION {
 
         omp_get_wtime;
 
+        xkomp_get;
+
     local:
         *;
 };

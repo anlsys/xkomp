@@ -9,6 +9,7 @@
 xkomp_t  _xkomp;
 xkomp_t * xkomp;
 
+extern "C"
 xkomp_t *
 xkomp_get(void)
 {

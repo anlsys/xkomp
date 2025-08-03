@@ -31,6 +31,8 @@ typedef struct  xkomp_t
 }               xkomp_t;
 
 extern xkomp_t * xkomp;
+
+extern "C"
 xkomp_t * xkomp_get(void);
 
 /** load env variables */
