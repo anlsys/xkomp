@@ -37,6 +37,10 @@ VERSION {
         omp_get_wtime;
 
         xkomp_get;
+        xkomp_current_task;
+        xkomp_current_stream;
+        xkomp_current_stream_instruction;
+        xkomp_current_stream_instruction_counter;
 
     local:
         *;

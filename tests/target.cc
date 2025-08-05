@@ -19,7 +19,7 @@ main(void)
         # pragma omp single
         {
             # if 0
-            # pragma omp target device(DEVICE_ID)
+            # pragma omp target device(DEVICE_ID) nowait
             {
                 printf("Running from device `%d` is initial: %d\n",
                         omp_get_device_num(), omp_is_initial_device());
@@ -31,10 +31,18 @@ main(void)
 
             # pragma omp target update to(x[0:N]) device(DEVICE_ID) depend(out: x) nowait
 
-            # if 0
+            # if 1
             # pragma omp target teams distribute parallel for  device(DEVICE_ID) depend(out: x) nowait
             for (int i = 0 ; i < N ; ++i)
                 x[i] = i;
+
+            # if 0
+            # pragma omp target device(DEVICE_ID) depend(out: x) nowait
+            {
+                printf("Running as a task from device `%d` is initial: %d\n",
+                        omp_get_device_num(), omp_is_initial_device());
+            }
+            # endif
 
             # if 0
             # pragma omp target update from(x[0:N])            device(DEVICE_ID) nowait
