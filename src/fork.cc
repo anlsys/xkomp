@@ -87,8 +87,8 @@ typedef struct  wargs_t
 
 static void *
 fork_call_wrapper(
-    xkrt_team_t * team,
-    xkrt_thread_t * thread
+    team_t * team,
+    thread_t * thread
 ) {
     assert(team);
     assert(thread);
@@ -112,7 +112,7 @@ __kmpc_push_num_threads(
     pushed_num_threads = num_threads < 0 ? 0 : num_threads;
 }
 
-static xkrt_team_binding_places_t
+static team_binding_places_t
 parse_places(
     const char * places
 ) {
@@ -121,7 +121,7 @@ parse_places(
 
     struct mapping_struct_s {
         const char * name;
-        xkrt_team_binding_places_t places;
+        team_binding_places_t places;
     };
 
     constexpr struct mapping_struct_s mapping[] = {
@@ -150,7 +150,7 @@ parse_places(
     return mapping[fb].places;
 }
 
-static xkrt_team_binding_mode_t
+static team_binding_mode_t
 parse_proc_bind(
     const char * proc_bind
 ) {
@@ -230,7 +230,7 @@ __kmpc_fork_teams(
     kmpc_micro microtask,
     ...
 ) {
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    thread_t * thread = thread_t::get_tls();
     assert(thread);
 
     LOGGER_NOT_IMPLEMENTED();

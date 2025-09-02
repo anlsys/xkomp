@@ -66,9 +66,9 @@ body_omp_task(task_t * task)
 # pragma message(TODO "Remove this hack, and pass the task as a parameter of LLVM's offload library - which requires to patch the CodeGen to get the task")
 # if XKOMP_HACK_TARGET_CALL
 _Thread_local task_t                            * XKOMP_CURRENT_TASK                        = NULL;
-_Thread_local xkrt_stream_t                     * XKOMP_CURRENT_STREAM                      = NULL;
-_Thread_local xkrt_stream_instruction_t         * XKOMP_CURRENT_STREAM_INSTRUCTION          = NULL;
-_Thread_local xkrt_stream_instruction_counter_t   XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER  = NULL;
+_Thread_local stream_t                     * XKOMP_CURRENT_STREAM                      = NULL;
+_Thread_local stream_instruction_t         * XKOMP_CURRENT_STREAM_INSTRUCTION          = NULL;
+_Thread_local stream_instruction_counter_t   XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER  = 0;
 # endif /* XKOMP_HACK_TARGET_CALL */
 
 extern "C"
@@ -79,19 +79,19 @@ extern "C"
         return XKOMP_CURRENT_TASK;
     }
 
-    xkrt_stream_t *
+    stream_t *
     xkomp_current_stream(void)
     {
         return XKOMP_CURRENT_STREAM;
     }
 
-    xkrt_stream_instruction_t *
+    stream_instruction_t *
     xkomp_current_stream_instruction(void)
     {
         return XKOMP_CURRENT_STREAM_INSTRUCTION;
     }
 
-    xkrt_stream_instruction_counter_t
+    stream_instruction_counter_t
     xkomp_current_stream_instruction_counter(void)
     {
         return XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER;
@@ -101,9 +101,9 @@ extern "C"
 // called from a device thread, progressing instructions
 static inline void
 body_omp_task_target(
-    xkrt_stream_t * stream,
-    xkrt_stream_instruction_t * instr,
-    xkrt_stream_instruction_counter_t idx
+    stream_t * stream,
+    stream_instruction_t * instr,
+    stream_instruction_counter_t idx
 ) {
     task_t * task = (task_t *) instr->kern.vargs;
     assert(task);
@@ -113,7 +113,7 @@ body_omp_task_target(
     assert(ktask);
 
     # if XKOMP_HACK_TARGET_CALL
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    thread_t * thread = thread_t::get_tls();
     assert(thread);
     assert(thread->current_task != task);
 
@@ -141,11 +141,11 @@ task_alloc(
 ) {
     // there is a '1' offset between omp device id and xkaapi device id
     static_assert(HOST_DEVICE_GLOBAL_ID == 0);
-    xkrt_device_global_id_t device_global_id = (device_id == -1) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
+    device_global_id_t device_global_id = (device_id == -1) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
 
     assert(ndeps <= TASK_MAX_ACCESSES);
 
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    thread_t * thread = thread_t::get_tls();
     assert(thread);
 
     xkomp_t * xkomp = xkomp_get();
@@ -371,7 +371,7 @@ __kmpc_omp_task_with_deps(
         }
 
         // process deps
-        xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+        thread_t * thread = thread_t::get_tls();
         assert(thread);
         thread->resolve(task, accesses, ndeps);
     }

@@ -1,8 +1,10 @@
 #ifndef __XKOMP_H__
 # define __XKOMP_H__
 
-# include <xkrt/xkrt.h>
+# include <xkrt/runtime.h>
 # include <xkomp/support.h>
+
+XKRT_NAMESPACE_USE;
 
 /* environment variables parsed at program starts */
 typedef struct  xkomp_env_t
@@ -18,7 +20,7 @@ typedef struct  xkomp_env_t
 typedef struct  xkomp_t
 {
     /* underlaying XKaapi runtime */
-    xkrt_runtime_t runtime;
+    runtime_t runtime;
 
     /* omp task format */
     task_format_id_t task_format;
@@ -27,7 +29,7 @@ typedef struct  xkomp_t
     xkomp_env_t env;
 
     /* the team of thread for parallel region */
-    xkrt_team_t team;
+    team_t team;
 }               xkomp_t;
 
 extern xkomp_t * xkomp;
@@ -44,10 +46,10 @@ void xkomp_task_register_format(xkomp_t * xkomp);
 # define XKOMP_HACK_TARGET_CALL 1
 # if XKOMP_HACK_TARGET_CALL
 extern "C" {
-    task_t                              * xkomp_current_task(void);
-    xkrt_stream_t                       * xkomp_current_stream(void);
-    xkrt_stream_instruction_t           * xkomp_current_stream_instruction(void);
-    xkrt_stream_instruction_counter_t     xkomp_current_stream_instruction_counter(void);
+    task_t                         * xkomp_current_task(void);
+    stream_t                       * xkomp_current_stream(void);
+    stream_instruction_t           * xkomp_current_stream_instruction(void);
+    stream_instruction_counter_t     xkomp_current_stream_instruction_counter(void);
 };
 # endif /* XKOMP_HACK_TARGET_CALL */
 

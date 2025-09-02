@@ -16,7 +16,7 @@ xkomp_get(void)
     if (xkomp == NULL)
     {
         xkomp = &_xkomp;
-        xkrt_init(&xkomp->runtime);
+        xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
     }
@@ -33,7 +33,7 @@ __kmpc_global_thread_num(ident_t * loc)
     // ensure runtime is initialized
     xkomp_get();
 
-    xkrt_thread_t * tls = xkrt_thread_t::get_tls();
+    thread_t * tls = thread_t::get_tls();
     assert(tls);
 
     return tls->gtid;
@@ -47,7 +47,7 @@ extern "C"
 int
 omp_get_thread_num(void)
 {
-    xkrt_thread_t * tls = xkrt_thread_t::get_tls();
+    thread_t * tls = thread_t::get_tls();
     assert(tls);
 
     return tls->tid;
@@ -57,7 +57,7 @@ extern "C"
 int
 omp_get_num_threads(void)
 {
-    xkrt_thread_t * tls = xkrt_thread_t::get_tls();
+    thread_t * tls = thread_t::get_tls();
     assert(tls);
 
     return tls->team->priv.nthreads;
@@ -75,5 +75,5 @@ extern "C"
 double
 omp_get_wtime(void)
 {
-    return xkrt_get_nanotime() / 1.0e9;
+    return get_nanotime() / 1.0e9;
 }

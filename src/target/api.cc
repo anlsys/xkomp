@@ -1,4 +1,6 @@
+# include <xkomp/xkomp.h>
 # include <xkomp/support.h>
+
 # include <xkrt/thread/thread.h>
 
 extern "C"
@@ -17,7 +19,7 @@ extern "C"
 bool
 __kmpc_omp_has_task_team(int gtid)
 {
-    xkrt_thread_t * tls = xkrt_thread_t::get_tls();
+    thread_t * tls = thread_t::get_tls();
     assert(tls);
     assert(gtid == tls->gtid);
     return tls->team != NULL;

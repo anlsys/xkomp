@@ -8,7 +8,7 @@ __kmpc_barrier(
     kmp_int32 global_tid
 ) {
     xkomp_t * xkomp = xkomp_get();
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    thread_t * thread = thread_t::get_tls();
     assert(thread);
 
     # if 0

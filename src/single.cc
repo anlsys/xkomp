@@ -10,7 +10,7 @@ extern "C"
 int32_t
 __kmpc_single(ident_t * loc, int32_t gtid)
 {
-    xkrt_thread_t * tls = xkrt_thread_t::get_tls();
+    thread_t * tls = thread_t::get_tls();
     assert(tls);
 
     return tls->tid == 0;

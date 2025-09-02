@@ -38,7 +38,7 @@ __kmpc_for_static_init_4(
     kmp_int32 incr,
     kmp_int32 chunk
 ) {
-    xkrt_thread_t * thread = xkrt_thread_t::get_tls();
+    thread_t * thread = thread_t::get_tls();
     assert(thread);
 
     kmp_int32 pupper_old = *pupper;
