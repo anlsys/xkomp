@@ -37,11 +37,9 @@ for (int i = 0 ; i < ndevices ; ++i)
 {
     size_t x = MAX(0,    (i+0)*chunk_size - ghost);
     size_t y = MIN(size, (i+1)*chunk_size + ghost);
-    # pragma omp enter data map(alloc: domain[x:y-x]) device(i)                 // allocate each replica
+    # pragma omp enter data map(alloc: domain[x:y-x]) device(i)                         // allocate each replica
 
-    # pragma omp target update nowait depend(out: domain[x]) to(device[x:y-x])  // H2D each replica
-
-    in_deps.push_back();
+    # pragma omp target update nowait depend(out: virtual_deps[i+1]) to(device[x:y-x])  // H2D each replica
 }
 
 for (int iter = 0 ; iter < niter)
@@ -53,8 +51,8 @@ for (int iter = 0 ; iter < niter)
         # pragma omp target nowait device(i)                \
             depend(in:  virtual_deps[i+0])                  \
             depend(out: virtual_deps[i+1])                  \
-            depend(out: virtual_deps[i+2])
-            stencil(a, b, i, chunk_size);
+            depend(in: virtual_deps[i+2])
+            stencil(domain, x, y, i, chunk_size);
 
         // forward ghost cells to neighbors
         for (int j = i - 1 ; j < i + 1 ; ++j)
@@ -109,7 +107,7 @@ for (int iter = 0 ; iter < niter)
         size_t x = MAX(0,    (i+0)*chunk_size - ghost);
         size_t y = MIN(size, (i+1)*chunk_size + ghost);
         # pragma omp target nowait device(i) access(readwrite: segment(domain + x, domain + y)))
-            stencil(a, b, i, chunk_size);
+            stencil(domain, x, y, i, chunk_size);
     }
 }
 # pragma omp target nowait device(omp_get_initial_device()) access(read: segment(domain, size))
