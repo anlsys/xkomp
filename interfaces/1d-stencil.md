@@ -108,8 +108,7 @@ for (int i = 0 ; i < ndevices ; ++i)
 }
 
 // depend on all previous D2H
-# pragma omp target nowait device(omp_get_initial_device())
-    depend(iterator(i=0:ndevices), in: virtual_deps[i+1])
+# pragma omp target nowait device(omp_get_initial_device()) depend(iterator(i=0:ndevices), in: virtual_deps[i+1])
     puts("Domain is now coherent on the host");
 
 for (int i = 0 ; i < ndevices ; ++i)
