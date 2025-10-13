@@ -1,5 +1,6 @@
 Objective: 1-d stencil distributed across all available devices
 
+```
 // 'x' means present on the device
 // '.' means not present on the device
 host = [xxxxx xxxxx xxxxx xxxxx]
@@ -8,6 +9,7 @@ gpu1 = [....x xxxxx x.... .....]
 gpu2 = [..... ....x xxxxx x....]
 gpu3 = [..... ..... ....x xxxxx]
        —-----------------------> memory domain
+```
 
 // We want to generate that graph
 
@@ -19,7 +21,7 @@ gpu3 = [..... ..... ....x xxxxx]
        O
 
 Shared code in both versions
-```
+```C
 int      ndevices = omp_get_num_devices();
 size_t       size = 1024;
 size_t chunk_size = size / ndevices();
@@ -28,7 +30,7 @@ float    * domain = (float *) malloc(sizeof(float) * size);
 ```
 
 With current map+depend
-```
+```C
 char virtual_deps[ndevices+2];  // ugly VLA, whatever
 
 for (int i = 0 ; i < ndevices ; ++i)
@@ -99,7 +101,7 @@ for (int i = 0 ; i < ndevices ; ++i)
 
 
 With an 'access' clause
-```
+```C
 for (int iter = 0 ; iter < niter)
 {
     for (int i = 0 ; i < omp_get_num_devices() ; ++i)
