@@ -17,8 +17,10 @@ gpu3 = [..... ..... ....x xxxxx]
     |/|/\ |
     O O O O         Iteration 2
      [...]
+    |/|/\ |
+    O O O O         Iteration n
     \ \ / /
-       O
+       O            Read on the host
 
 Shared code in both versions
 ```C
