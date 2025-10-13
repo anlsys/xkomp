@@ -24,7 +24,7 @@ Shared code in both versions
 ```C
 int      ndevices = omp_get_num_devices();
 size_t       size = 1024;
-size_t chunk_size = size / ndevices();
+size_t chunk_size = size / ndevices;
 size_t      ghost = 1;
 float    * domain = (float *) malloc(sizeof(float) * size);
 ```
@@ -51,7 +51,7 @@ for (int iter = 0 ; iter < niter)
         # pragma omp target nowait device(i)                \
             depend(in:  virtual_deps[i+0])                  \
             depend(out: virtual_deps[i+1])                  \
-            depend(in: virtual_deps[i+2])
+            depend(in:  virtual_deps[i+2])
             stencil(domain, x, y, i, chunk_size);
 
         // forward ghost cells to neighbors
@@ -85,6 +85,7 @@ for (int i = 0 ; i < ndevices ; ++i)
     # pragma omp target nowait depend(out: virtual_deps[i+1]) device(i) from(domain[x:y-x])
 }
 
+// depend on all previous D2H
 # pragma omp target nowait device(omp_get_initial_device())
     depend(iterator(i=0:ndevices), in: virtual_deps[i+1])
     puts("Domain is now coherent on the host");
