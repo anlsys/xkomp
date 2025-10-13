@@ -40,15 +40,15 @@ for (int iter = 0 ; iter < niter)
     {
         size_t x = MAX(0,    (i+0)*chunk_size - ghost);
         size_t y = MIN(size, (i+1)*chunk_size + ghost);
-        # pragma omp target nowait device(i) access(readwrite: segment(domain + x, domain + y)))
+        # pragma omp target nowait device(i) access(readwrite: segment(domain, x, y)))
             stencil(domain, x, y, i, chunk_size);
     }
 }
-# pragma omp target nowait device(omp_get_initial_device()) access(read: segment(domain, size))
+# pragma omp target nowait device(omp_get_initial_device()) access(read: segment(domain, 0, size))
     puts("Domain is now coherent on the host");
 
 // TODO: some pragma to release device replicas (in xkblas, xkblas_invalidate_caches)
-# pragma omp target exit data map(storage: segment(domain, domain + size))
+# pragma omp target exit data map(storage: segment(domain, 0, size))
 ```
 
 With current map+depend
