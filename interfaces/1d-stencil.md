@@ -37,7 +37,7 @@ for (int i = 0 ; i < ndevices ; ++i)
 {
     size_t x = MAX(0,    (i+0)*chunk_size - ghost);
     size_t y = MIN(size, (i+1)*chunk_size + ghost);
-    # pragma omp enter data map(alloc: domain[x:y-x]) device(i)                         // allocate each replica
+    # pragma omp enter data map(storage: domain[x:y-x]) device(i)                         // allocate each replica
 
     # pragma omp target update nowait depend(out: virtual_deps[i+1]) to(device[x:y-x])  // H2D each replica
 }
@@ -94,7 +94,7 @@ for (int i = 0 ; i < ndevices ; ++i)
 {
     size_t x = MAX(0,    (i+0)*chunk_size - ghost);
     size_t y = MIN(size, (i+1)*chunk_size + ghost);
-    # pragma omp exit data map(alloc: domain[x:y-x]) device(i)
+    # pragma omp exit data map(storage: domain[x:y-x]) device(i)
 }
 ```
 
