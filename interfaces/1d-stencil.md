@@ -47,6 +47,8 @@ for (int iter = 0 ; iter < niter)
 # pragma omp target nowait device(omp_get_initial_device()) access(read: segment(domain, 0, size))
     puts("Domain is now coherent on the host");
 
+# pragma omp taskwait
+
 // TODO: some pragma to release device replicas (in xkblas, xkblas_invalidate_caches)
 # pragma omp target exit data map(storage: segment(domain, 0, size))
 ```
@@ -110,6 +112,8 @@ for (int i = 0 ; i < ndevices ; ++i)
 // depend on all previous D2H
 # pragma omp target nowait device(omp_get_initial_device()) depend(iterator(i=0:ndevices), in: virtual_deps[i+1])
     puts("Domain is now coherent on the host");
+
+# pragma omp taskwait
 
 for (int i = 0 ; i < ndevices ; ++i)
 {
