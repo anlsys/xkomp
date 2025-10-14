@@ -13,12 +13,12 @@ gpu3 = [..... ..... ....x xxxxx]
 
 We want to generate that graph
 ```
-    O O O O         Iteration 1
-    |/|/\ |
-    O O O O         Iteration 2
+    O O  O O         Iteration 1
+    |/|\/|\|
+    O O  O O         Iteration 2
      [...]
-    |/|/\ |
-    O O O O         Iteration n
+    |/|\/|\|
+    O O  O O         Iteration n
     \ \ / /
        O            Read on the host
 ```
