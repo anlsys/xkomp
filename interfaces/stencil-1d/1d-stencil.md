@@ -25,6 +25,7 @@ gpu3 = [..... ..... ..... xxxxx]
 
 We want to generate that graph
 ```
+GPU0 GPU1 GPU2 GPU3
     O O  O O         Iteration 1
     |/|\/|\|
     O O  O O         Iteration 2
