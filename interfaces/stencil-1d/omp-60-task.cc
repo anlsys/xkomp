@@ -46,7 +46,7 @@ main(void)
                 size_t x = MAX(0,    (i+0)*chunk_size - ghost);
                 size_t y = MIN(size, (i+1)*chunk_size + ghost);
 
-                # pragma omp target enter data map(alloc: domain1[x:y-x], domain2[x:y-x]) device(i)
+                # pragma omp target enter data map(storage: domain1[x:y-x], domain2[x:y-x]) device(i)
 
                 # pragma omp target update nowait depend(out: virtual_deps[i+1]) to(domain1[x:y-x], domain2[x:y-x])
             }
@@ -58,27 +58,28 @@ main(void)
 
                 for (int i = 0 ; i < ndevices ; ++i)
                 {
-                    size_t x1 = MAX(0,    (i+0)*chunk_size - ghost);
-                    size_t y1 = MIN(size, (i+1)*chunk_size + ghost);
+                    size_t ai = MAX(0,    (i+0)*chunk_size - ghost);
+                    size_t bi = MIN(size, (i+1)*chunk_size + ghost);
+                    
                     # pragma omp target nowait device(i)                \
                         depend(in:  virtual_deps[i+0])                  \
                         depend(out: virtual_deps[i+1])                  \
                         depend(in:  virtual_deps[i+2])
-                        stencil(d1, d2, x1, y1, i, chunk_size);
+                        stencil(d1, d2, ai, bi, i, chunk_size);
 
                     // forward ghost cells to neighbors
                     for (int j = i - 1 ; j < i + 1 ; ++j)
                     {
                         if (i == j || j < 0 || j >= ndevices)
                             continue ;
-
-                        size_t x2 = MAX(0,    (j+0)*chunk_size - ghost);
-                        size_t y2 = MIN(size, (j+1)*chunk_size + ghost);
+                        
+                        size_t aj = MAX(0,    (j+0)*chunk_size - ghost);
+                        size_t bj = MIN(size, (j+1)*chunk_size + ghost);
 
                         # pragma omp task depend(out: virtual_deps[i+1])
                         {
-                            void * src = omp_get_mapped_ptr(d1 + x1, i);
-                            void * dst = omp_get_mapped_ptr(d2 + x2, j);
+                            void * src = omp_get_mapped_ptr(d1 + ai, i);
+                            void * dst = omp_get_mapped_ptr(d2 + aj, j);
                             size_t len = ghost;
                             size_t src_offset = (j==i-1) ?                  0 : chunk_size + ghost; // forward 'left'
                             size_t dst_offset = (j==i-1) ? chunk_size + ghost :                  0; // forward 'right'
@@ -111,7 +112,7 @@ main(void)
                 size_t x = MAX(0,    (i+0)*chunk_size - ghost);
                 size_t y = MIN(size, (i+1)*chunk_size + ghost);
                 // TODO: should be 'storage' rather than 'release' - but LLVM implements it as 'release'
-                # pragma omp target exit data map(release: domain1[x:y-x], domain2[x:y-x]) device(i)
+                # pragma omp target exit data map(storage: domain1[x:y-x], domain2[x:y-x]) device(i)
             }
 
         }   /* single */
