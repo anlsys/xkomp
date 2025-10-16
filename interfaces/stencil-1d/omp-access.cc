@@ -47,9 +47,9 @@ main(void)
                 for (int i = 0 ; i < ndevices ; ++i)
                 {
                     size_t a1 = (i+0)*chunk_size;
-                    size_t b1 = (i+1)*chunk_size;
-                    size_t a2 = MAX(0,    a1 - ghost);
-                    size_t b2 = MIN(size, b1 + ghost);
+                    size_t b1 = (i+1)*chunk_size;                 // a1       b1
+                    size_t a2 = MAX(0,    a1 - ghost);            // a2           b2
+                    size_t b2 = MIN(size, b1 + ghost);            //  x x x x x    x . . . .    . . . . .    . . . . . 
                     # pragma omp target nowait device(i)    \
                         access(write: segment(d1, a1, b1))  \
                         access(read:  segment(d2, a2, b2))  \
