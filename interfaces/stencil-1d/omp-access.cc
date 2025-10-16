@@ -53,7 +53,7 @@ main(void)
                     # pragma omp target nowait device(i)    \
                         access(write: segment(d1, a1, b1))  \
                         access(read:  segment(d2, a2, b2))  \
-                        stencil(d1, d2, a1, b1, i, chunk_size);
+                        stencil(d1, d2, a1, b1, i, chunk_size);    // should be rewritten with `d1 := current_task->accesses[0].device_ptr` or something
                 }
             }
 
