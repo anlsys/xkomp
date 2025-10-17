@@ -4,9 +4,10 @@ Objective: 1-d stencil distributed across all available devices
 // 'x' means present on the device
 // '.' means not present on the device
 
-// READ with 1 ghost cell
-
+// ON THE HOST
 host = [xxxxx xxxxx xxxxx xxxxx]
+
+// READ with 1 ghost cell
 gpu0 = [xxxxx x.... ..... .....]
 gpu1 = [....x xxxxx x.... .....]
 gpu2 = [..... ....x xxxxx x....]
@@ -14,8 +15,6 @@ gpu3 = [..... ..... ....x xxxxx]
        —-----------------------> virtual memory
 
 // WRITE
-
-host = [xxxxx xxxxx xxxxx xxxxx]
 gpu0 = [xxxxx ..... ..... .....]
 gpu1 = [..... xxxxx ..... .....]
 gpu2 = [..... ..... xxxxx .....]
