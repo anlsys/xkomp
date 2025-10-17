@@ -96,8 +96,8 @@ main(void)
             // D2H
             for (int i = 0 ; i < ndevices ; ++i)
             {
-                size_t x = MAX(0,    (i+0)*chunk_size - ghost);
-                size_t y = MIN(size, (i+1)*chunk_size + ghost);
+                size_t x = (i+0)*chunk_size;
+                size_t y = (i+1)*chunk_size;
                 # pragma omp target update nowait depend(out: virtual_deps[i+1]) device(i) from(domain1[x:y-x])
             }
 
