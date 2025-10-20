@@ -53,8 +53,8 @@ main(void)
 
                     if (iter == 0)                                // this is an optimization
                     {
-                        # pragma omp access(alloc: segment(d1, a2, b2)) device(i)
-                        # pragma omp access(alloc: segment(d2, a2, b2)) device(i)
+                        # pragma omp target access(storage: segment(d1, a2, b2)) device(i)
+                        # pragma omp target access(storage: segment(d2, a2, b2)) device(i)
                     }
                     
                     # pragma omp target nowait device(i)    \
