@@ -50,6 +50,13 @@ main(void)
                     size_t b1 = (i+1)*chunk_size;                 // a1       b1
                     size_t a2 = MAX(0,    a1 - ghost);            // a2           b2
                     size_t b2 = MIN(size, b1 + ghost);            //  x x x x x    x . . . .    . . . . .    . . . . . 
+
+                    if (iter == 0)                                // this is an optimization
+                    {
+                        # pragma omp access(alloc: segment(d1, a2, b2)) device(i)
+                        # pragma omp access(alloc: segment(d2, a2, b2)) device(i)
+                    }
+                    
                     # pragma omp target nowait device(i)    \
                         access(write: segment(d1, a1, b1))  \
                         access(read:  segment(d2, a2, b2))  \
