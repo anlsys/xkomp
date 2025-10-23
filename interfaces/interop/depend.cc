@@ -2,21 +2,6 @@
 // Do we want to synchronize ? //
 /////////////////////////////////
 
-// 0
-
-x = 0;
-
-# pragma omp target nowait device(0) access(write: x)
-    x = 42;
-
-# pragma omp target nowait device(1) access(read: x)
-    puts(x);
-
-# pragma omp taskwait
-
-puts(x)
-
-
 
 // 1
 
