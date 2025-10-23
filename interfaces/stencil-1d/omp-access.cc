@@ -51,11 +51,8 @@ main(void)
                     size_t a2 = MAX(0,    a1 - ghost);            // a2           b2
                     size_t b2 = MIN(size, b1 + ghost);            //  x x x x x    x . . . .    . . . . .    . . . . . 
 
-                    if (iter == 0)                                // this is an optimization
-                    {
-                        # pragma omp target access(storage: segment(d1, a2, b2)) device(i)
-                        # pragma omp target access(storage: segment(d2, a2, b2)) device(i)
-                    }
+                    if (iter == 0)                                // this is an optimization, to preallocate buffers
+                        # pragma omp target update nowait access(write: segment(d1, a2, b2)) access(write: segment(d2, a2, b2)) device(i)
                     
                     # pragma omp target nowait device(i)    \
                         access(write: segment(d1, a1, b1))  \
