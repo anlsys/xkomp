@@ -3,6 +3,23 @@
 // 'omp_target_memcpy' behaves 'as if there was an access clause' //
 ////////////////////////////////////////////////////////////////////
 
+
+// 0
+
+x = 0;
+
+# pragma omp target nowait device(0) access(write: x)
+    x = 42;
+
+# pragma omp target nowait device(1) access(read: x)
+    puts(x);
+
+# pragma omp taskwait
+
+puts(x)        // will print '0', unless we specify that 'taskwait' must write-back all device memory to the host ? Do we want to enforce 'write-back' at the end of some scope ?
+
+
+
 // 1
 
 # pragma omp task depend(out: x[0]) coherent
