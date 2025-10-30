@@ -66,9 +66,9 @@ body_omp_task(task_t * task)
 # pragma message(TODO "Remove this hack, and pass the task as a parameter of LLVM's offload library - which requires to patch the CodeGen to get the task")
 # if XKOMP_HACK_TARGET_CALL
 _Thread_local task_t                            * XKOMP_CURRENT_TASK                        = NULL;
-_Thread_local stream_t                     * XKOMP_CURRENT_STREAM                      = NULL;
-_Thread_local stream_instruction_t         * XKOMP_CURRENT_STREAM_INSTRUCTION          = NULL;
-_Thread_local stream_instruction_counter_t   XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER  = 0;
+_Thread_local queue_t                     * XKOMP_CURRENT_STREAM                      = NULL;
+_Thread_local command_t         * XKOMP_CURRENT_STREAM_INSTRUCTION          = NULL;
+_Thread_local queue_command_list_counter_t   XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER  = 0;
 # endif /* XKOMP_HACK_TARGET_CALL */
 
 extern "C"
@@ -79,20 +79,20 @@ extern "C"
         return XKOMP_CURRENT_TASK;
     }
 
-    stream_t *
-    xkomp_current_stream(void)
+    queue_t *
+    xkomp_current_queue(void)
     {
         return XKOMP_CURRENT_STREAM;
     }
 
-    stream_instruction_t *
-    xkomp_current_stream_instruction(void)
+    command_t *
+    xkomp_current_command(void)
     {
         return XKOMP_CURRENT_STREAM_INSTRUCTION;
     }
 
-    stream_instruction_counter_t
-    xkomp_current_stream_instruction_counter(void)
+    queue_command_list_counter_t
+    xkomp_current_queue_command_list_counter(void)
     {
         return XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER;
     }
@@ -101,9 +101,9 @@ extern "C"
 // called from a device thread, progressing instructions
 static inline void
 body_omp_task_target(
-    stream_t * stream,
-    stream_instruction_t * instr,
-    stream_instruction_counter_t idx
+    queue_t * queue,
+    command_t * instr,
+    queue_command_list_counter_t idx
 ) {
     task_t * task = (task_t *) instr->kern.vargs;
     assert(task);
@@ -118,7 +118,7 @@ body_omp_task_target(
     assert(thread->current_task != task);
 
     XKOMP_CURRENT_TASK = task;
-    XKOMP_CURRENT_STREAM = stream;
+    XKOMP_CURRENT_STREAM = queue;
     XKOMP_CURRENT_STREAM_INSTRUCTION = instr;
     XKOMP_CURRENT_STREAM_INSTRUCTION_COUNTER = idx;
 
@@ -373,7 +373,7 @@ __kmpc_omp_task_with_deps(
         // process deps
         thread_t * thread = thread_t::get_tls();
         assert(thread);
-        thread->resolve(task, accesses, ndeps);
+        thread->resolve(accesses, ndeps);
     }
 
     xkomp->runtime.task_commit(task);

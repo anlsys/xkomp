@@ -38,9 +38,9 @@ VERSION {
 
         xkomp_get;
         xkomp_current_task;
-        xkomp_current_stream;
-        xkomp_current_stream_instruction;
-        xkomp_current_stream_instruction_counter;
+        xkomp_current_queue;
+        xkomp_current_command;
+        xkomp_current_queue_command_list_counter;
 
     local:
         *;

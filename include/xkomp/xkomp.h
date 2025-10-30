@@ -46,10 +46,10 @@ void xkomp_task_register_format(xkomp_t * xkomp);
 # define XKOMP_HACK_TARGET_CALL 1
 # if XKOMP_HACK_TARGET_CALL
 extern "C" {
-    task_t                         * xkomp_current_task(void);
-    stream_t                       * xkomp_current_stream(void);
-    stream_instruction_t           * xkomp_current_stream_instruction(void);
-    stream_instruction_counter_t     xkomp_current_stream_instruction_counter(void);
+    task_t                        * xkomp_current_task(void);
+    queue_t                       * xkomp_current_queue(void);
+    command_t                     * xkomp_current_command(void);
+    queue_command_list_counter_t    xkomp_current_queue_command_list_counter(void);
 };
 # endif /* XKOMP_HACK_TARGET_CALL */
 
