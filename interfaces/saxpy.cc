@@ -26,7 +26,11 @@ float λ, * A, * B, * C;
    for (int i = 0; i < n; ++i)
        C[i] = λ * A[i] + B[i];
 
+# pragma omp target update nowait access(release: A[0:n], B[0:n]) device(0)
+
 # pragma omp task access(read: C[0:n])
     func(C, n);
+
+# pragma omp target update nowait access(release: C[0:n]) device(0)
 
 # pragma omp taskwait
