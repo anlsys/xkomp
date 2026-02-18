@@ -18,21 +18,11 @@ main(void)
     {
         # pragma omp single
         {
-            # if 0
-            # pragma omp target device(DEVICE_ID) nowait
-            {
-                printf("Running from device `%d` is initial: %d\n",
-                        omp_get_device_num(), omp_is_initial_device());
-                assert(omp_is_initial_device() == 0);
-            }
-            # endif
-
             # pragma omp target enter data map(alloc: x[0:N]) device(DEVICE_ID)
 
             # pragma omp target update to(x[0:N]) device(DEVICE_ID) depend(out: x) nowait
 
-            # if 1
-            # pragma omp target teams distribute parallel for  device(DEVICE_ID) depend(out: x) nowait
+            # pragma omp target teams distribute parallel for device(DEVICE_ID) depend(out: x) nowait
             for (int i = 0 ; i < N ; ++i)
                 x[i] = i;
 
@@ -44,14 +34,18 @@ main(void)
             }
             # endif
 
-            # if 0
-            # pragma omp target update from(x[0:N])            device(DEVICE_ID) nowait
-            # endif
-            # endif
+            # pragma omp target update from(x[0:N]) device(DEVICE_ID) nowait depend(in: x)
 
             # pragma omp taskwait
 
             # pragma omp target exit data map(release: x[0:N]) device(DEVICE_ID)
+
+
+            // test: ensure the vector is correct on host
+            for (int i = 0 ; i < N ; ++i)
+            {
+                assert(x[i] == i);
+            }
         }
     }
     return 0;

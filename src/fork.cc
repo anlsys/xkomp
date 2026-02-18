@@ -87,13 +87,11 @@ typedef struct  wargs_t
 
 static void *
 fork_call_wrapper(
-    team_t * team,
     thread_t * thread
 ) {
-    assert(team);
     assert(thread);
 
-    wargs_t * wargs = (wargs_t *) team->desc.args;
+    wargs_t * wargs = (wargs_t *) thread->team->desc.args;
 	__kmp_invoke_microtask(wargs->f, thread->gtid, thread->tid, wargs->argc, wargs->args);
 
     return NULL;

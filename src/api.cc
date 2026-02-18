@@ -5,17 +5,15 @@
 # include <xkrt/logger/logger.h>
 # include <stdint.h>
 
-
-xkomp_t  _xkomp;
-xkomp_t * xkomp;
-
 extern "C"
 xkomp_t *
 xkomp_get(void)
 {
+    static xkomp_t * xkomp = NULL;
     if (xkomp == NULL)
     {
-        xkomp = &_xkomp;
+        xkomp = (xkomp_t *) malloc(sizeof(xkomp_t));
+        assert(xkomp);
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
@@ -77,3 +75,22 @@ omp_get_wtime(void)
 {
     return get_nanotime() / 1.0e9;
 }
+
+///////////////////////////////////////
+// init/deinit of the shared library //
+///////////////////////////////////////
+
+void __attribute__((constructor))
+__xkomp_init(void)
+{
+    xkomp_get();
+}
+
+void __attribute__((destructor))
+__xkomp_teardown(void)
+{
+    xkomp_t * xkomp = xkomp_get();
+    xkomp->runtime.deinit();
+}
+
+

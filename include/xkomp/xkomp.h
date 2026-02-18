@@ -32,8 +32,6 @@ typedef struct  xkomp_t
     team_t team;
 }               xkomp_t;
 
-extern xkomp_t * xkomp;
-
 extern "C"
 xkomp_t * xkomp_get(void);
 
@@ -42,15 +40,5 @@ void xkomp_env_init(xkomp_env_t * env);
 
 /* save task format */
 void xkomp_task_register_format(xkomp_t * xkomp);
-
-# define XKOMP_HACK_TARGET_CALL 1
-# if XKOMP_HACK_TARGET_CALL
-extern "C" {
-    task_t                        * xkomp_current_task(void);
-    queue_t                       * xkomp_current_queue(void);
-    command_t                     * xkomp_current_command(void);
-    queue_command_list_counter_t    xkomp_current_queue_command_list_counter(void);
-};
-# endif /* XKOMP_HACK_TARGET_CALL */
 
 # endif /* __XKOMP_H__ */
