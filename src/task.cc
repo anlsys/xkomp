@@ -1,9 +1,7 @@
+# include <omp.h>
+
 # include <xkomp/xkomp.h>
 # include <xkomp/kmp.h>
-
-# include <xkrt/logger/logger.h>
-
-# include <assert.h>
 
 // task args
 typedef struct  task_args_t
@@ -96,7 +94,7 @@ task_alloc(
 ) {
     // there is a '1' offset between omp device id and xkaapi device id
     static_assert(HOST_DEVICE_GLOBAL_ID == 0);
-    device_global_id_t device_global_id = (device_id == -1) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
+    device_global_id_t device_global_id = (device_id == omp_get_initial_device()) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
 
     assert(nacs <= TASK_MAX_ACCESSES);
 

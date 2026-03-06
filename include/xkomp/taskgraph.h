@@ -6,6 +6,7 @@ XKRT_NAMESPACE_USE;
 
 typedef enum    xkomp_taskgraph_flags_t
 {
+    XKOMP_TASKGRAPH_FLAG_NONE       = (0),
     XKOMP_TASKGRAPH_FLAG_RESET      = (1 << 0),
     XKOMP_TASKGRAPH_FLAG_IF         = (1 << 1),
     XKOMP_TASKGRAPH_FLAG_NOGROUP    = (1 << 2)

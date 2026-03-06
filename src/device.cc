@@ -1,5 +1,4 @@
-# include <xkrt/logger/logger.h>
-
+# include <xkomp/xkomp.h>
 # include <assert.h>
 
 extern "C"
@@ -21,8 +20,8 @@ extern "C"
 int
 omp_get_num_devices(void)
 {
-    LOGGER_NOT_IMPLEMENTED();
-    return -1;
+    xkomp_t * xkomp = xkomp_get();
+    return xkomp->runtime.get_ndevices() - 1;
 }
 
 extern "C"
@@ -37,14 +36,12 @@ extern "C"
 int
 omp_get_initial_device(void)
 {
-    LOGGER_NOT_IMPLEMENTED();
-    return -1;
+    return HOST_DEVICE_GLOBAL_ID - 1;
 }
 
 extern "C"
 int
 omp_is_initial_device(void)
 {
-    LOGGER_NOT_IMPLEMENTED();
-    return 0;
+    return omp_get_num_devices() == omp_get_initial_device();
 }
