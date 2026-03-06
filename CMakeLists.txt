@@ -39,6 +39,7 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/master.cc
     ${CMAKE_SOURCE_DIR}/src/single.cc
     ${CMAKE_SOURCE_DIR}/src/task.cc
+    ${CMAKE_SOURCE_DIR}/src/taskgraph.cc
 )
 
 # if target is enabled, add sources

@@ -106,14 +106,23 @@ task_alloc(
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
+    // compute flags
     task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
+
     if (nacs)
         xkflags |= TASK_FLAG_ACCESSES;
+
     if (device_global_id != HOST_DEVICE_GLOBAL_ID)
     {
         xkflags |= TASK_FLAG_DEVICE;        // execute on a device thread
         xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit cmductions
     }
+
+    assert(thread->current_task);
+    if (thread->current_task->flags & TASK_FLAG_RECORDING)
+        xkflags |= TASK_FLAG_RECORD;    // TODO: if replayable clause evaluates to false, do not
+
+    // compute task size from flags
     const size_t task_size = task_compute_size(xkflags, nacs);
 
     // see llvm impl

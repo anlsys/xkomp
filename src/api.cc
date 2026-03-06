@@ -5,11 +5,12 @@
 # include <xkrt/logger/logger.h>
 # include <stdint.h>
 
+static xkomp_t * xkomp = NULL;
+
 extern "C"
 xkomp_t *
 xkomp_get(void)
 {
-    static xkomp_t * xkomp = NULL;
     if (xkomp == NULL)
     {
         xkomp = (xkomp_t *) malloc(sizeof(xkomp_t));
@@ -17,6 +18,7 @@ xkomp_get(void)
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
+        new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
     }
 
     return xkomp;
@@ -65,8 +67,7 @@ extern "C"
 int
 omp_get_max_threads(void)
 {
-    xkomp_t * omp = xkomp_get();
-    return MIN(omp->env.OMP_NUM_THREADS, omp->env.OMP_THREAD_LIMIT);
+    return MIN(xkomp->env.OMP_NUM_THREADS, xkomp->env.OMP_THREAD_LIMIT);
 }
 
 extern "C"
@@ -89,8 +90,11 @@ __xkomp_init(void)
 void __attribute__((destructor))
 __xkomp_teardown(void)
 {
-    xkomp_t * xkomp = xkomp_get();
+    assert(xkomp);
     xkomp->runtime.deinit();
+    xkomp->taskgraphs.~map();
+    free(xkomp);
+    xkomp = NULL;
 }
 
 

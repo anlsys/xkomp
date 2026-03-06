@@ -3,6 +3,7 @@
 
 # include <xkrt/runtime.h>
 # include <xkomp/support.h>
+# include <xkomp/taskgraph.h>
 
 XKRT_NAMESPACE_USE;
 
@@ -19,7 +20,7 @@ typedef struct  xkomp_env_t
 /** global variable that holds the entire openmp context */
 typedef struct  xkomp_t
 {
-    /* underlaying XKaapi runtime */
+    /* underlaying XKRT runtime */
     runtime_t runtime;
 
     /* omp task format */
@@ -30,6 +31,13 @@ typedef struct  xkomp_t
 
     /* the team of thread for parallel region */
     team_t team;
+
+    /**
+     *  Taskgraphs
+     *  Parallel init/replay of the same taskgraph is not supported
+     */
+    std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t> taskgraphs;
+
 }               xkomp_t;
 
 extern "C"
