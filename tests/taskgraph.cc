@@ -20,9 +20,11 @@ main(void)
 {
     char * deps = (char *) 0x1000;
 
-    constexpr size_t size = 1024*1024*1024;
-    char * x = (char *) calloc(1, sizeof(char) * size);
+    constexpr size_t size = 1024; // *1024*1024;
+    unsigned char * x = (unsigned char *) calloc(1, sizeof(unsigned char) * size);
     assert(x);
+    for (int i = 0 ; i < size ; ++i)
+        x[i] = i % 256;
 
     # pragma omp parallel num_threads(2)
     {
@@ -38,9 +40,11 @@ main(void)
             }
 
             printf("Number of devices: %d\n", omp_get_num_devices());
-
-            for (int iter = 0 ; iter < 2 ; ++iter)
+            int iter;
+            for (iter = 0 ; iter < 5 ; ++iter)
             {
+                double t0 = omp_get_wtime();
+
                 constexpr xkomp_taskgraph_id_t graph_id = 0;
                 constexpr xkomp_taskgraph_flags_t flags = XKOMP_TASKGRAPH_FLAG_NONE;
                 pragma_omp_taskgraph(graph_id, flags, [&] (void)
@@ -49,14 +53,9 @@ main(void)
                     {
                         # pragma omp target update to(x[0:size]) device(omp_device_num) depend(out: deps[omp_device_num]) nowait
 
-                # if 0
-                        for (int i = 0 ; i < 4 ; ++i)
-                        {
-                            # pragma omp target teams distribute parallel for device(omp_device_num) depend(inoutset: deps[omp_device_num]) nowait
-                            for (int i = 0 ; i < size ; ++i)
-                                ;
-                        }
-                    # endif
+                        # pragma omp target teams distribute parallel for device(omp_device_num) depend(inoutset: deps[omp_device_num]) nowait
+                        for (int i = 0 ; i < size ; ++i)
+                            x[i] = (2*x[i] % 256);
 
                         # pragma omp target update from(x[0:size]) device(omp_device_num) nowait depend(in: deps[omp_device_num])
 
@@ -64,12 +63,23 @@ main(void)
                             printf("Device %d completed iter %d\n", omp_device_num, iter);
                     }
                 });
+
+                double tf = omp_get_wtime();
+                printf("Iter %d took %lf us\n", iter, (tf - t0) * 1e6);
             }
 
             for (int omp_device_num = 0 ; omp_device_num < omp_get_num_devices() ; ++omp_device_num)
             {
                 # pragma omp target exit data map(release: x[0:size]) device(omp_device_num)
             }
+
+            for (int i = 0 ; i < size ; ++i)
+            {
+                if (size < 16)
+                    printf("x[%d] = %d\n", i, x[i]);
+                assert(x[i] == (2 * i % 256));
+            }
+
         }
     }
     return 0;

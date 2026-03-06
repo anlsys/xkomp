@@ -21,30 +21,34 @@ xkomp_taskgraph_begin(
     xkomp_taskgraph_t & taskgraph = xkomp->taskgraphs[graph_id];
     ++taskgraph.rc;
 
+    // first execution = record
     if (taskgraph.rc == 1)
     {
         xkomp->runtime.task_dependency_graph_record_start(&taskgraph.tdg);
     }
     else
     {
-        // TODO
-        /* build a CG from a tdg */
-        xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, false, &taskgraph.cg);
+        // optimize before first replay
+        if (taskgraph.rc == 2)
+        {
+            /* build a CG from a tdg */
+            xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, false, &taskgraph.cg);
 
-        /* remove useless nodes */
-        //  # pragma omp taskgraph optimize(reduce_nodes)
-        taskgraph.cg.optimize(COMMAND_GRAPH_OPT_REDUCE_NODE);
+            /* remove useless nodes */
+            //  # pragma omp taskgraph optimize(reduce_nodes)
+            taskgraph.cg.optimize(COMMAND_GRAPH_OPT_REDUCE_NODE);
 
-        /* remove redundant edges */
-        //  # pragma omp taskgraph optimize(reduce_edges)
-        taskgraph.cg.optimize(COMMAND_GRAPH_OPT_REDUCE_EDGE);
+            /* remove redundant edges */
+            //  # pragma omp taskgraph optimize(reduce_edges)
+            taskgraph.cg.optimize(COMMAND_GRAPH_OPT_REDUCE_EDGE);
 
-        /* contract the CG */
-        //  # pragma omp taskgraph optimize(batch)
-        taskgraph.cg.optimize(COMMAND_GRAPH_OPT_BATCH);
+            /* contract the CG */
+            //  # pragma omp taskgraph optimize(batch)
+            taskgraph.cg.optimize(COMMAND_GRAPH_OPT_BATCH);
+        }
 
         /* replay the CG */
-        // xkomp->runtime.command_graph_replay(&taskgraph.cg);
+        xkomp->runtime.command_graph_replay(&taskgraph.cg);
     }
 
     // TODO: if map is resized, address would change
@@ -57,7 +61,7 @@ xkomp_taskgraph_end(xkomp_taskgraph_t * taskgraph)
 {
     xkomp_t * xkomp = xkomp_get();
 
-    // stop record for first encounter
+    // stop recording
     if (taskgraph->rc == 1)
     {
         // implicit taskwait in XKRT

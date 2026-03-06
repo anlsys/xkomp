@@ -107,18 +107,22 @@ task_alloc(
     // compute flags
     task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
 
+    // if tasks has accesses, set flag
     if (nacs)
         xkflags |= TASK_FLAG_ACCESSES;
 
+    // if task is not running on the host, set device/detachable flags, since libomptarget may submit commands
     if (device_global_id != HOST_DEVICE_GLOBAL_ID)
     {
         xkflags |= TASK_FLAG_DEVICE;        // execute on a device thread
         xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit cmductions
     }
 
+    // if recording flag is set on parent, record that task.
+    // TODO: if the `replayable(false)` is set, do not record
     assert(thread->current_task);
     if (thread->current_task->flags & TASK_FLAG_RECORDING)
-        xkflags |= TASK_FLAG_RECORD;    // TODO: if replayable clause evaluates to false, do not
+        xkflags |= TASK_FLAG_RECORD;
 
     // compute task size from flags
     const size_t task_size = task_compute_size(xkflags, nacs);
@@ -139,8 +143,10 @@ task_alloc(
     args->task      = task;
     args->task_size = task_size;
 
-    if (xkflags & TASK_FLAG_DEVICE)
+    // init dev/det infos
+    if (device_global_id != HOST_DEVICE_GLOBAL_ID)
     {
+        assert(xkflags & TASK_FLAG_DEVICE);
         task_dev_info_t * dev = TASK_DEV_INFO(task);
         new (dev) task_dev_info_t(device_global_id, UNSPECIFIED_TASK_ACCESS);
 
@@ -149,6 +155,14 @@ task_alloc(
         new (det) task_det_info_t();
     }
 
+    // init rec info
+    if (xkflags & TASK_FLAG_RECORD)
+    {
+        task_rec_info_t * rec = TASK_REC_INFO(task);
+        new (rec) task_rec_info_t();
+    }
+
+    // init kmp task info
     kmp_task_t * ktask = (kmp_task_t *) (args + 1);
     assert(ktask);
 
