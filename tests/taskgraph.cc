@@ -20,7 +20,8 @@ main(void)
 {
     char * deps = (char *) 0x1000;
 
-    constexpr size_t size = 1024*1024*1024;
+    // constexpr size_t size = 1024*1024*1024;
+    constexpr size_t size = 1024;
     unsigned char * x = (unsigned char *) calloc(1, sizeof(unsigned char) * size);
     assert(x);
     # if 0
@@ -63,14 +64,11 @@ main(void)
 
                         # pragma omp target update from(x[0:size]) device(omp_device_num) nowait depend(in: deps[omp_device_num])
 
-                        # if 0
-
                         # pragma omp task depend(in: deps[omp_device_num]) firstprivate(omp_device_num, iter) default(none)
                             printf("Host task - Device %d completed iter %d\n", omp_device_num, iter);
 
                         # pragma omp task
                             printf("Host task independent completed\n");
-                        # endif
                     }
                 }
                 );

@@ -65,19 +65,26 @@ body_omp_task_run(
 static inline void
 body_omp_task_replay(void * args[XKRT_CALLBACK_ARGS_MAX])
 {
-    runtime_t * runtime = (runtime_t *) args[0];
-    task_t    * task    = (task_t *)    args[1];
+    runtime_t * runtime       = (runtime_t *) args[0];
+    task_t    * original_task = (task_t *)    args[1];
+    command_t * cmd           = (command_t *) args[2];
     assert(runtime);
-    assert(task);
-
-    thread_t * thread = thread_t::get_tls();
-    assert(thread);
-    assert(thread->team);
+    assert(original_task);
+    assert(cmd);
 
     // TODO: instead, dupplicate that task and its data environments
-    LOGGER_WARN("TODO: dupplicate also data environment");
-    runtime->task_spawn([&] (runtime_t *, device_t *, task_t * task) {
-        body_omp_task_run(task, thread->gtid);
+    LOGGER_WARN("TODO: dupplicate also data environment - and save 'original task' in it");
+    runtime->task_spawn([=] (runtime_t * runtime, device_t *, task_t * replay_task) {
+        # if 0
+        thread_t * thread = thread_t::get_tls();
+        assert(thread);
+        assert(thread->team);
+        const int gtid = thread->gtid;
+        # else
+        constexpr int gtid = 0;
+        # endif
+        body_omp_task_run(original_task, gtid);
+        cmd->completion_callback_raise();   // complete command after task replayed
     });
 }
 
@@ -100,19 +107,17 @@ body_omp_task(
         task_rec_info_t * rec = TASK_REC_INFO(task);
         assert(rec);
 
-        /* copy the command */
-        callback_t callback;
-        callback.func = body_omp_task_replay;
-        callback.args[0] = runtime;
-        callback.args[1] = task;
-        static_assert(XKRT_CALLBACK_ARGS_MAX >= 2);
-
+        /* insert a host routine that submit a new task when the command is ready */
         task_command_record_t * cmdrec = rec->commands.put();
-        constexpr command_type_t ctype = XKRT_COMMAND_TYPE_EMPTY;
+        constexpr command_type_t ctype = XKRT_COMMAND_TYPE_HOST_ROUTINE;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
-        cmdrec->command.init(ctype, flags);
-        cmdrec->command.completion_callback_push(callback);
         cmdrec->state = task->state.value;
+        cmdrec->command.init(ctype, flags);
+        cmdrec->command.host_routine.callback.func = body_omp_task_replay;
+        cmdrec->command.host_routine.callback.args[0] = runtime;
+        cmdrec->command.host_routine.callback.args[1] = task;
+        cmdrec->command.host_routine.callback.args[2] = &cmdrec->command;
+        static_assert(XKRT_CALLBACK_ARGS_MAX >= 3);
     }
 }
 

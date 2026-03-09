@@ -18,6 +18,16 @@ pragma_omp_taskgraph(
     if (taskgraph->rc == 1)
         f();
     xkomp_taskgraph_end(taskgraph);
+
+    # if 1
+    {
+        char fname[128];
+        snprintf(fname, sizeof(fname), "taskgraph-%d.dot", graph_id);
+        FILE * f = fopen(fname, "w");
+        taskgraph->tdg.dump_tasks(f);
+        fclose(f);
+    }
+    # endif
 }
 
 #endif /* __XKOMP_PLUS_PLUS_H__ */
