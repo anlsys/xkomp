@@ -28,7 +28,9 @@ xkomp_taskgraph_begin(
     }
     else
     {
-        // optimize before first replay
+        // second or further executions
+
+        // optimize on first replay
         if (taskgraph.rc == 2)
         {
             /* build a CG from a tdg */
