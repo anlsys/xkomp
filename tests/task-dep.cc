@@ -1,5 +1,6 @@
 # include <assert.h>
 # include <omp.h>
+# include <unistd.h>
 # include <stdio.h>
 
 int
@@ -7,7 +8,7 @@ main(void)
 {
     # pragma omp parallel
     {
-        # pragma omp single
+        # pragma omp master
         {
             printf("Thread %d out of %d threads\n", omp_get_thread_num(), omp_get_num_threads());
 
@@ -70,6 +71,7 @@ main(void)
             }
 
             # pragma omp taskwait
+
             assert(x == 6);
             assert(y == 1);
         }

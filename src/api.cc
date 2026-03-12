@@ -19,7 +19,6 @@ xkomp_get(void)
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_format(xkomp);
         new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
-        xkomp->team.priv.threads = NULL;
     }
 
     return xkomp;
