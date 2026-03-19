@@ -109,7 +109,7 @@ body_omp_task(
 
         /* insert a host routine that submit a new task when the command is ready */
         task_command_record_t * cmdrec = rec->commands.put();
-        constexpr command_type_t ctype = XKRT_COMMAND_TYPE_HOST_ROUTINE;
+        constexpr command_type_t ctype = COMMAND_TYPE_HOST_ROUTINE;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
         cmdrec->state = task->state.value;
         cmdrec->command.init(ctype, flags);
@@ -357,7 +357,7 @@ __kmpc_omp_task_with_deps(
 
     if (nacs)
     {
-        task_acs_info_t * acs = TASK_DEP_INFO(task);
+        task_acs_info_t * acs = TASK_ACS_INFO(task);
         new (acs) task_acs_info_t(nacs);
 
         // set accesses
