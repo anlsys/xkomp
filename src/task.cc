@@ -7,7 +7,6 @@
 typedef struct  task_args_t
 {
     task_t * task;
-    size_t task_size;
     // followed by the kmp task
 }               task_args_t;
 
@@ -58,6 +57,7 @@ body_omp_task_run(
 ) {
     kmp_task_t * ktask = ktask_from_task(task);
     assert(ktask);
+    assert(ktask->routine);
     ktask->routine(gtid, ktask);
 }
 
@@ -172,28 +172,18 @@ task_alloc(
 
     // if recording flag is set on parent, record that task.
     // TODO: if the `replayable(false)` is set, do not record
-    assert(thread->current_task);
-    if (thread->current_task->flags & TASK_FLAG_RECORDING)
-        xkflags |= TASK_FLAG_RECORD;
-
-    // compute task size from flags
-    const size_t task_size = task_compute_size(xkflags, nacs);
 
     // see llvm impl
-    const size_t args_size      = sizeof(task_args_t) + sizeof_kmp_task_t;
-    const size_t total_size     = task_size + args_size;
-    const size_t shareds_offset = round_up_to_val(total_size, sizeof(void *));
-    assert(shareds_offset >= total_size);
-    assert(shareds_offset % sizeof(void *) == 0);
-    const size_t size = shareds_offset + sizeof_shareds;
-
-    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, size);
+    const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
+    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, args_size, nacs);
     assert(task);
 
-    task_args_t * args = (task_args_t *) TASK_ARGS(task, task_size);
-    assert(args);
-    args->task      = task;
-    args->task_size = task_size;
+    // init acs infos
+    if (nacs)
+    {
+        task_acs_info_t * acs = TASK_ACS_INFO(task);
+        new (acs) task_acs_info_t(nacs);
+    }
 
     // init dev/det infos
     if (device_global_id != HOST_DEVICE_GLOBAL_ID)
@@ -207,18 +197,16 @@ task_alloc(
         new (det) task_det_info_t();
     }
 
-    // init rec info
-    if (xkflags & TASK_FLAG_RECORD)
-    {
-        task_rec_info_t * rec = TASK_REC_INFO(task);
-        new (rec) task_rec_info_t();
-    }
+    // init args
+    task_args_t * args = (task_args_t *) TASK_ARGS(task);
+    assert(args);
+    args->task = task;
 
     // init kmp task info
     kmp_task_t * ktask = (kmp_task_t *) (args + 1);
     assert(ktask);
 
-    ktask->shareds = (sizeof_shareds > 0) ? ((char *) task) + shareds_offset : NULL;
+    ktask->shareds = (void *) (sizeof_shareds <= 0 ? 0 : ((uintptr_t) ktask) + sizeof_kmp_task_t);
     ktask->routine = task_entry;
     ktask->part_id = 0;
 
@@ -352,14 +340,14 @@ __kmpc_omp_task_with_deps(
     kmp_int32 nacs_noalias,
     kmp_depend_info_t * noalias_dep_list
 ) {
+    xkomp_t * xkomp = xkomp_get();
+    assert(xkomp);
+
     assert(nacs <= TASK_MAX_ACCESSES);
     task_t * task = task_from_ktask(ktask);
 
     if (nacs)
     {
-        task_acs_info_t * acs = TASK_ACS_INFO(task);
-        new (acs) task_acs_info_t(nacs);
-
         // set accesses
         access_t * accesses = TASK_ACCESSES(task);
         for (int i = 0; i < nacs ; ++i)
@@ -401,12 +389,9 @@ __kmpc_omp_task_with_deps(
         }
 
         // process deps
-        thread_t * thread = thread_t::get_tls();
-        assert(thread);
-        thread->resolve(accesses, nacs);
+        xkomp->runtime.task_accesses_resolve(accesses, nacs);
     }
 
-    xkomp_t * xkomp = xkomp_get();
     xkomp->runtime.task_commit(task);
 
     # define TASK_CURRENT_NOT_QUEUED    0

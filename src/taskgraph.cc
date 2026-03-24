@@ -24,7 +24,8 @@ xkomp_taskgraph_begin(
     // first execution = record
     if (taskgraph.rc == 1)
     {
-        xkomp->runtime.task_dependency_graph_record_start(&taskgraph.tdg);
+        constexpr bool execute_commands = true;
+        xkomp->runtime.task_dependency_graph_record_start(&taskgraph.tdg, execute_commands);
     }
     else
     {
@@ -34,7 +35,7 @@ xkomp_taskgraph_begin(
         if (taskgraph.rc == 2)
         {
             /* build a CG from a tdg */
-            xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, false, &taskgraph.cg);
+            xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, &taskgraph.cg);
 
             /* remove useless nodes */
             //  # pragma omp taskgraph optimize(reduce_nodes)

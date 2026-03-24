@@ -62,13 +62,13 @@ main(void)
                                 ; // x[i] = (2*i % 256);
                         }
 
-                        # pragma omp target update from(x[0:size]) device(omp_device_num) nowait depend(in: deps[omp_device_num])
+                        # pragma omp target update from(x[0:size]) device(omp_device_num) nowait depend(out: deps[omp_device_num])
 
-                        # pragma omp task depend(in: deps[omp_device_num]) firstprivate(omp_device_num, iter) default(none)
-                            printf("Host task - Device %d completed iter %d\n", omp_device_num, iter);
+                        // # pragma omp task depend(in: deps[omp_device_num]) firstprivate(omp_device_num, iter) default(none)
+                        //     printf("Host task - Device %d completed iter %d\n", omp_device_num, iter);
 
-                        # pragma omp task
-                            printf("Host task independent completed\n");
+                        // # pragma omp task
+                        //     printf("Host task independent completed\n");
                     }
                 }
                 );

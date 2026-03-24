@@ -11,12 +11,14 @@ main(void)
         {
             int x = 42;
             int y = 43;
+            int z = 44;
 
-            # pragma omp task shared(x) firstprivate(y)
+            # pragma omp task shared(x, z) firstprivate(y)
             {
                 puts("Hello world");
                 assert(x == 42);
                 assert(y == 43);
+                assert(z == 44);
             }
 
             # pragma omp task shared(x) firstprivate(y) untied
