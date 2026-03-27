@@ -10,10 +10,11 @@
 //      - the same single thread creates and replay the taskgraph record
 //
 
-# include <xkomp/xkomp.h>
-# include <xkomp/xkomp++.h>
-
+# if 0
+#  include <xkomp/xkomp.h>
+#  include <xkomp/xkomp++.h>
 XKRT_NAMESPACE_USE;
+# endif
 
 int
 main(void)
@@ -57,9 +58,11 @@ main(void)
             for (iter = 0 ; iter < 1 ; ++iter)
             {
                 double t0 = omp_get_wtime();
+                # if 0
                 constexpr xkomp_taskgraph_id_t graph_id = 0;
                 constexpr xkomp_taskgraph_flags_t flags = XKOMP_TASKGRAPH_FLAG_NONE;
                 pragma_omp_taskgraph(graph_id, flags, [&] (void)
+                # endif
                 {
                     # pragma omp task depend(out: x)
                         {}
@@ -81,11 +84,14 @@ main(void)
                     # pragma omp task depend(in: x)
                         {}
                 }
+                # if 0
                 );
+                # endif
 
                 double tf = omp_get_wtime();
                 printf("Iter %d took %lf us\n", iter, (tf - t0) * 1e6);
             }
+            # pragma omp taskwait
 
             for (int omp_device_num = 0 ; omp_device_num < omp_get_num_devices() ; ++omp_device_num)
             {

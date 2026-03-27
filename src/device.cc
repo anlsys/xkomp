@@ -36,7 +36,7 @@ extern "C"
 int
 omp_get_initial_device(void)
 {
-    return HOST_DEVICE_GLOBAL_ID - 1;
+    return XKRT_HOST_DEVICE_GLOBAL_ID - 1;
 }
 
 extern "C"

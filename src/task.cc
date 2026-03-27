@@ -109,15 +109,15 @@ body_omp_task(
 
         /* insert a host routine that submit a new task when the command is ready */
         task_command_record_t * cmdrec = rec->commands.put();
-        constexpr command_type_t ctype = COMMAND_TYPE_HOST_ROUTINE;
+        constexpr ocg::command_type_t ctype = ocg::COMMAND_TYPE_HOST_ROUTINE;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
         cmdrec->state = task->state.value;
-        cmdrec->command.init(ctype, flags);
-        cmdrec->command.host_routine.callback.func = body_omp_task_replay;
-        cmdrec->command.host_routine.callback.args[0] = runtime;
-        cmdrec->command.host_routine.callback.args[1] = task;
-        cmdrec->command.host_routine.callback.args[2] = &cmdrec->command;
-        static_assert(XKRT_CALLBACK_ARGS_MAX >= 3);
+        new (&cmdrec->command) command_t(ctype, flags);
+        cmdrec->command.host_routine.func = body_omp_task_replay;
+        cmdrec->command.host_routine.args[0] = runtime;
+        cmdrec->command.host_routine.args[1] = task;
+        cmdrec->command.host_routine.args[2] = &cmdrec->command;
+        static_assert(OCG_CALLBACK_ARGS_MAX >= 3);
     }
 }
 
@@ -145,10 +145,10 @@ task_alloc(
     kmp_int32 device_id
 ) {
     // there is a '1' offset between omp device id and xkaapi device id
-    static_assert(HOST_DEVICE_GLOBAL_ID == 0);
-    device_global_id_t device_global_id = (device_id == omp_get_initial_device()) ? HOST_DEVICE_GLOBAL_ID : (device_id + 1);
+    static_assert(XKRT_HOST_DEVICE_GLOBAL_ID == 0);
+    device_global_id_t device_global_id = (device_id == omp_get_initial_device()) ? XKRT_HOST_DEVICE_GLOBAL_ID : (device_id + 1);
 
-    assert(nacs <= TASK_MAX_ACCESSES);
+    assert(nacs <= XKRT_TASK_MAX_ACCESSES);
 
     thread_t * thread = thread_t::get_tls();
     assert(thread);
@@ -164,7 +164,7 @@ task_alloc(
         xkflags |= TASK_FLAG_ACCESSES;
 
     // if task is not running on the host, set device/detachable flags, since libomptarget may submit commands
-    if (device_global_id != HOST_DEVICE_GLOBAL_ID)
+    if (device_global_id != XKRT_HOST_DEVICE_GLOBAL_ID)
     {
         xkflags |= TASK_FLAG_DEVICE;        // execute on a device thread
         xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit cmductions
@@ -175,7 +175,7 @@ task_alloc(
 
     // see llvm impl
     const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
-    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, args_size, nacs);
+    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, NULL, args_size, nacs);
     assert(task);
 
     // init acs infos
@@ -186,11 +186,11 @@ task_alloc(
     }
 
     // init dev/det infos
-    if (device_global_id != HOST_DEVICE_GLOBAL_ID)
+    if (device_global_id != XKRT_HOST_DEVICE_GLOBAL_ID)
     {
         assert(xkflags & TASK_FLAG_DEVICE);
         task_dev_info_t * dev = TASK_DEV_INFO(task);
-        new (dev) task_dev_info_t(device_global_id, UNSPECIFIED_TASK_ACCESS);
+        new (dev) task_dev_info_t(device_global_id, XKRT_UNSPECIFIED_TASK_ACCESS);
 
         assert(xkflags & TASK_FLAG_DETACHABLE);
         task_det_info_t * det = TASK_DET_INFO(task);
@@ -343,7 +343,7 @@ __kmpc_omp_task_with_deps(
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
-    assert(nacs <= TASK_MAX_ACCESSES);
+    assert(nacs <= XKRT_TASK_MAX_ACCESSES);
     task_t * task = task_from_ktask(ktask);
 
     if (nacs)
