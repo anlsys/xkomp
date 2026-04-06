@@ -3,8 +3,8 @@ An experimental OpenMP runtime-library implementation built on top of the XKaapi
 
 # Prerequisities
 You must have an installation of
-- XKRT (the XKaapi runtime system) - https://gitlab.inria.fr/xkaapi/dev-v2
-- patched LLVM - https://github.com/anlsys/llvm-project and compile your openmp program with it
+- [XKRT](https://github.com/rpereira-dev/xkrt)
+- [patched LLVM](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
 
 Example of LLVM build
 ```
@@ -22,9 +22,8 @@ clang -fopenmp main.c -o main -lxkomp
 ```
 
 # Bits of history
-XKaapi is a dataflow programming model.
-XKRT is an implementation of XKaapi with support for task dependencies over intersecting regions of memory - https://gitlab.inria.fr/xkaapi/dev-v2
-This repo is an implementation of OpenMP on top of XKRT towards designing dataflow interfaces in OpenMP.
+XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)
+This repo is a prototype implementation of OpenMP, with partial support for taskgraphs (6.0) and extensions for dataflow, on top of XKRT.
 
 A previous implementation of OpenMP on top of XKaapi is available here:
 - https://gitlab.inria.fr/openmp/kaapi
