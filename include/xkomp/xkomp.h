@@ -10,11 +10,11 @@ XKRT_NAMESPACE_USE;
 /* environment variables parsed at program starts */
 typedef struct  xkomp_env_t
 {
-    char    OMP_DISPLAY_ENV;
-    int     OMP_NUM_THREADS;
-    int     OMP_THREAD_LIMIT;
-    char *  OMP_PLACES;
-    char *  OMP_PROC_BIND;
+    char OMP_DISPLAY_ENV;
+    int OMP_NUM_THREADS;
+    int OMP_THREAD_LIMIT;
+    const char * OMP_PLACES;
+    const char * OMP_PROC_BIND;
 }               xkomp_env_t;
 
 /** global variable that holds the entire openmp context */
@@ -40,10 +40,19 @@ typedef struct  xkomp_t
 extern "C"
 xkomp_t * xkomp_get(void);
 
+extern "C"
+xkrt_device_unique_id_t omp_device_id_to_xkomp(int device_id);
+
+extern "C"
+int xkomp_device_unique_id_to_omp(xkrt_device_unique_id_t device_unique_id);
+
 /** load env variables */
 void xkomp_env_init(xkomp_env_t * env);
 
 /* save task format */
 void xkomp_task_register_format(xkomp_t * xkomp);
+
+/* microtask max arguments */
+# define XKOMP_MICROTASK_MAX_ARGS 1024
 
 # endif /* __XKOMP_H__ */

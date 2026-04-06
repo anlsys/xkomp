@@ -144,9 +144,12 @@ task_alloc(
     kmp_int32 nacs,
     kmp_int32 device_id
 ) {
+    if (device_id == -1)
+        device_id = omp_get_default_device();
+
     // there is a '1' offset between omp device id and xkaapi device id
     static_assert(XKRT_HOST_DEVICE_UNIQUE_ID == 0);
-    device_unique_id_t device_unique_id = (device_id == omp_get_initial_device()) ? XKRT_HOST_DEVICE_UNIQUE_ID : (device_id + 1);
+    device_unique_id_t device_unique_id = omp_device_id_to_xkomp(device_id);
 
     assert(nacs <= XKRT_TASK_MAX_ACCESSES);
 

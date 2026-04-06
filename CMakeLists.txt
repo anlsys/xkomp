@@ -5,7 +5,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 SET(XKOMP xkomp)
 
 # Project name
-project(${XKOMP})
+project(${XKOMP} C CXX ASM)
 
 # Version
 set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
@@ -14,20 +14,23 @@ set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
 # OPTIONS #
 ###########
 
-option(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
 include(BooleanUtils)
-convert_bool(SUPPORT_TARGET)
+xkoption(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
+xkoption(SUPPORT_MICROTASK_GENERIC "Use generic implem for kmp microtasks (limited in number of arguments)." OFF)
+xkoption(SUPPORT_MICROTASK_LIBFFI "Use libffi for kmp microtasks (experimental)." OFF)
+xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86 implementation for kmp microtasks." ON)
 
 ###############
 # C++ version #
 ###############
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
 
-###############
-# DEPENDENCES #
-###############
+#########
+# XKOMP #
+#########
 
 SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/api.cc
@@ -47,14 +50,41 @@ if (SUPPORT_TARGET)
     list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/target/api.cc)
 endif()
 
-#########
-# XKOMP #
-#########
+# Microtask impl to use
+set(enabled_count 0)
+
+if (SUPPORT_MICROTASK_GENERIC)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/generic.cc)
+    math(EXPR enabled_count "${enabled_count} + 1")
+endif()
+
+if (SUPPORT_MICROTASK_LIBFFI)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/libffi.cc)
+    math(EXPR enabled_count "${enabled_count} + 1")
+endif()
+
+if (SUPPORT_MICROTASK_INTEL)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/z_Linux_asm.S)
+    add_compile_definitions(KMP_ARCH_X86_64=1)
+    math(EXPR enabled_count "${enabled_count} + 1")
+endif()
+
+if(NOT enabled_count EQUAL 1)
+    message(FATAL_ERROR "Invalid configuration: Exactly one of  56 if (SUPPORT_MICROTASK_GENERIC)
+, SUPPORT_MICROTASK_LIBFFI, or SUPPORT_MICROTASK_INTEL must be ON. Currently, ${enabled_count} are enabled.")
+endif()
 
 # XKOMP Lib
-add_custom_target( omp  ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libomp.so)
-add_custom_target(iomp5 ALL COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libiomp5.so)
-add_library(${XKOMP}  SHARED ${SOURCE_FILES})
+# Define the actual files as outputs
+add_custom_command(
+    OUTPUT libomp.so libiomp5.so
+    COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libomp.so
+    COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libiomp5.so
+    DEPENDS ${XKOMP}
+)
+add_custom_target(compat_links ALL DEPENDS libomp.so libiomp5.so)
+
+add_library(${XKOMP} SHARED ${SOURCE_FILES})
 
 # flags
 if(UNIX AND NOT APPLE)
@@ -74,6 +104,14 @@ include_directories(${CMAKE_SOURCE_DIR}/src/)
 find_package(XKRT REQUIRED NO_MODULE)
 target_link_libraries(${XKOMP} PRIVATE XKRT::xkrt)
 
+# libffi
+if (SUPPORT_MICROTASK_LIBFFI)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LibFFI REQUIRED libffi)
+    target_include_directories(${XKOMP} PRIVATE ${LibFFI_INCLUDE_DIRS})
+    target_link_libraries(${XKOMP} PRIVATE ${LibFFI_LIBRARIES})
+endif()
+
 ################
 # INSTALLATION #
 ################
@@ -88,12 +126,15 @@ install(
     FILES "${CMAKE_BINARY_DIR}/include/xkomp/support.h"
     DESTINATION include/xkomp
 )
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h*")
 
 # install lib
-install(TARGETS ${XKOMP}                              LIBRARY DESTINATION lib)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libomp.so           DESTINATION lib)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libiomp5.so         DESTINATION lib)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h*")
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/libomp.so
+    ${CMAKE_CURRENT_BINARY_DIR}/libiomp5.so
+    DESTINATION lib
+)
+install(TARGETS ${XKOMP} LIBRARY DESTINATION lib)
 
 # Installation - cmake files
 target_include_directories(${XKOMP} PUBLIC

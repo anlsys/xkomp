@@ -1,6 +1,8 @@
 # include <assert.h>
 # include <stdio.h>
 # include <stdlib.h>
+# include <time.h>
+# include <unistd.h>
 
 # include <omp.h>
 
@@ -21,9 +23,12 @@ main(void)
 {
     char * deps = (char *) 0x1000;
 
-    // constexpr size_t size = 1024*1024*1024;
-    constexpr size_t size = 1024;
-    const     size_t bs   = size / omp_get_num_devices();
+    const int ndevices = omp_get_num_devices() - 1;
+    assert(ndevices);
+    printf("Running on %d devices\n", ndevices);
+
+    constexpr size_t size = 16;
+    const     size_t bs   = size / ndevices;
     const     float  alpha = 0.7f;
 
     float * x = (float *) malloc(sizeof(float) * size);
@@ -47,13 +52,13 @@ main(void)
             // OpenMP setup //
             //////////////////
 
-            for (int omp_device_num = 0 ; omp_device_num < omp_get_num_devices() ; ++omp_device_num)
+            for (int omp_device_num = 0 ; omp_device_num < ndevices ; ++omp_device_num)
             {
                 # pragma omp target enter data map(alloc: x[omp_device_num*bs:bs]) device(omp_device_num)
                 # pragma omp target enter data map(alloc: y[omp_device_num*bs:bs]) device(omp_device_num)
             }
 
-            printf("Number of devices: %d\n", omp_get_num_devices());
+            printf("Number of devices (excluding host): %d\n", ndevices);
             int iter;
             for (iter = 0 ; iter < 1 ; ++iter)
             {
@@ -67,7 +72,7 @@ main(void)
                     # pragma omp task depend(out: x)
                         {}
 
-                    for (int omp_device_num = 0 ; omp_device_num < omp_get_num_devices() ; ++omp_device_num)
+                    for (int omp_device_num = 0 ; omp_device_num < ndevices ; ++omp_device_num)
                     {
                         # pragma omp target update to(x[omp_device_num*bs:bs]) device(omp_device_num) depend(in: x) depend(inoutset: deps[omp_device_num]) nowait
                         # pragma omp target update to(y[omp_device_num*bs:bs]) device(omp_device_num) depend(in: x) depend(inoutset: deps[omp_device_num]) nowait
@@ -92,15 +97,19 @@ main(void)
                 printf("Iter %d took %lf us\n", iter, (tf - t0) * 1e6);
             }
             # pragma omp taskwait
+            sleep(1);
 
-            for (int omp_device_num = 0 ; omp_device_num < omp_get_num_devices() ; ++omp_device_num)
+            for (int omp_device_num = 0 ; omp_device_num < ndevices ; ++omp_device_num)
             {
                 # pragma omp target exit data map(release: x[0:size]) device(omp_device_num)
                 # pragma omp target exit data map(release: y[0:size]) device(omp_device_num)
             }
 
             for (int i = 0 ; i < size ; ++i)
+            {
+                // printf("%lf vs %lf\n", y[i], alpha * x[i] + z[i]);
                 assert(abs(y[i] - (alpha * x[i] + z[i])) / y[i] * 100.0f < 0.1f);
+            }
         }
     }
     return 0;

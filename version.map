@@ -36,6 +36,9 @@ VERSION {
 
         omp_get_wtime;
 
+        omp_device_id_to_xkomp;
+        xkomp_device_unique_id_to_omp;
+
         xkomp_get;
         xkomp_current_task;
         xkomp_current_queue;
