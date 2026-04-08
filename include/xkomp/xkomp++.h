@@ -19,7 +19,7 @@ pragma_omp_taskgraph(
         f();
     xkomp_taskgraph_end(taskgraph);
 
-    # if 1
+    # if 0
     {
         char fname[128];
         snprintf(fname, sizeof(fname), "taskgraph-%d.dot", graph_id);
