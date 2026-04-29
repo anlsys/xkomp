@@ -1,10 +1,11 @@
 XKOMP_VERSION {
     global:
+        omp_device_id_to_xkomp;
         xkomp_device_unique_id_to_omp;
         xkomp_get;
+        xkomp_parallel;
         xkomp_taskgraph_begin;
         xkomp_taskgraph_end;
-        omp_device_id_to_xkomp;
 
     local:
         *;

@@ -50,6 +50,7 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/kmp/task.cc
 
     # XKOMP
+    ${CMAKE_SOURCE_DIR}/src/xkomp/parallel.cc
     ${CMAKE_SOURCE_DIR}/src/xkomp/taskgraph.cc
 )
 

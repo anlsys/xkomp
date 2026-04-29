@@ -107,17 +107,11 @@ __kmpc_fork_call(
     kmpc_micro f,
     ...
 ) {
-    // parse number of threads - see Algorithm 12.1 Determine Number of Threads
-    // This is not standard, but whatever for now
-    xkomp_t * omp = xkomp_get();
-    unsigned int nthreads = pushed_num_threads ? pushed_num_threads :
-                            omp->env.OMP_NUM_THREADS ? omp->env.OMP_NUM_THREADS : 0;
-    if (nthreads > omp->env.OMP_THREAD_LIMIT)
-        nthreads = omp->env.OMP_THREAD_LIMIT;
+    assert(argc <= XKOMP_MICROTASK_MAX_ARGS);
 
     // copy parallel region routine arguments
     wargs_t * wargs = (wargs_t *) malloc(sizeof(wargs_t));
-    assert(wargs && argc <= XKOMP_MICROTASK_MAX_ARGS);
+    assert(wargs);
     va_list args;
     va_start(args, f);
     wargs->argc = argc;
@@ -126,25 +120,8 @@ __kmpc_fork_call(
         wargs->args[i] = va_arg(args, void *);
     va_end(args);
 
-    // create the team
-    team_t team;
-    team.desc.args                = wargs;
-    team.desc.binding.flags       = XKRT_TEAM_BINDING_FLAG_NONE;
-    team.desc.binding.mode        = parse_proc_bind(omp->env.OMP_PROC_BIND);
-    team.desc.binding.nplaces     = 0;
-    team.desc.binding.places      = parse_places(omp->env.OMP_PLACES);
-    team.desc.binding.places_list = NULL;
-    team.desc.master_is_member    = true;
-    team.desc.nthreads            = nthreads;
-    team.desc.routine             = (team_routine_t) fork_call_wrapper;
-
-    // spawn the team
-    omp->runtime.team_create(&team);
-    assert(team.priv.threads != NULL);
-    assert(nthreads == 0 || team.priv.nthreads == nthreads);
-
-    // wait for completion
-    omp->runtime.team_join(&team);
+    // run xkomp parallel
+    xkomp_parallel(pushed_num_threads, (team_routine_t) fork_call_wrapper, wargs);
     free(wargs);
 
     // reset pushed num threads

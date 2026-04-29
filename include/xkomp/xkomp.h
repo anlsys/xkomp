@@ -55,4 +55,8 @@ void xkomp_task_register_format(xkomp_t * xkomp);
 /* microtask max arguments */
 # define XKOMP_MICROTASK_MAX_ARGS 1024
 
+/* # pragma omp parallel */
+extern "C"
+void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
+
 # endif /* __XKOMP_H__ */
