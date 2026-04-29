@@ -1,4 +1,4 @@
-VERSION {
+KMP_VERSION {
     global:
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
@@ -19,34 +19,8 @@ VERSION {
         __kmpc_master;
         __kmpc_end_master;
         __kmpc_fork_teams;
-
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;
-
-        omp_get_thread_num;
-        omp_get_num_threads;
-        omp_get_max_threads;
-
-        omp_set_default_device;
-        omp_get_default_device;
-        omp_get_num_devices;
-        omp_get_device_num;
-        omp_get_initial_device;
-        omp_is_initial_device;
-
-        omp_get_wtime;
-
-        omp_device_id_to_xkomp;
-        xkomp_device_unique_id_to_omp;
-
-        xkomp_get;
-        xkomp_current_task;
-        xkomp_current_queue;
-        xkomp_current_command;
-        xkomp_current_queue_command_list_counter;
-
-        xkomp_taskgraph_begin;
-        xkomp_taskgraph_end;
 
     local:
         *;

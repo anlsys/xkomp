@@ -7,9 +7,6 @@ SET(XKOMP xkomp)
 # Project name
 project(${XKOMP} C CXX ASM)
 
-# Version
-set(VERSION_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/version.map")
-
 ###########
 # OPTIONS #
 ###########
@@ -33,38 +30,49 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
 #########
 
 SET(SOURCE_FILES
+
+    # COMMON STANDARD RUNTIME API
     ${CMAKE_SOURCE_DIR}/src/api.cc
-    ${CMAKE_SOURCE_DIR}/src/barrier.cc
     ${CMAKE_SOURCE_DIR}/src/device.cc
     ${CMAKE_SOURCE_DIR}/src/env.cc
-    ${CMAKE_SOURCE_DIR}/src/for.cc
-    ${CMAKE_SOURCE_DIR}/src/fork.cc
-    ${CMAKE_SOURCE_DIR}/src/master.cc
-    ${CMAKE_SOURCE_DIR}/src/single.cc
-    ${CMAKE_SOURCE_DIR}/src/task.cc
-    ${CMAKE_SOURCE_DIR}/src/taskgraph.cc
+
+    # GOMP
+    ${CMAKE_SOURCE_DIR}/src/gomp/task.cc
+    ${CMAKE_SOURCE_DIR}/src/gomp/parallel.cc
+
+    # KMP
+    ${CMAKE_SOURCE_DIR}/src/kmp/barrier.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/for.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/fork.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/master.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/single.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/thread.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/task.cc
+
+    # XKOMP
+    ${CMAKE_SOURCE_DIR}/src/xkomp/taskgraph.cc
 )
 
 # if target is enabled, add sources
 if (SUPPORT_TARGET)
-    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/target/api.cc)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/target/api.cc)
 endif()
 
 # Microtask impl to use
 set(enabled_count 0)
 
 if (SUPPORT_MICROTASK_GENERIC)
-    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/generic.cc)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/arch/generic.cc)
     math(EXPR enabled_count "${enabled_count} + 1")
 endif()
 
 if (SUPPORT_MICROTASK_LIBFFI)
-    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/libffi.cc)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/arch/libffi.cc)
     math(EXPR enabled_count "${enabled_count} + 1")
 endif()
 
 if (SUPPORT_MICROTASK_INTEL)
-    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/arch/z_Linux_asm.S)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/arch/z_Linux_asm.S)
     add_compile_definitions(KMP_ARCH_X86_64=1)
     math(EXPR enabled_count "${enabled_count} + 1")
 endif()
@@ -80,6 +88,8 @@ add_custom_command(
     OUTPUT libomp.so libiomp5.so
     COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libomp.so
     COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libiomp5.so
+    COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libgomp.so
+    COMMAND ${CMAKE_COMMAND} -E create_symlink lib${XKOMP}.so libgomp.so.1
     DEPENDS ${XKOMP}
 )
 add_custom_target(compat_links ALL DEPENDS libomp.so libiomp5.so)
@@ -88,7 +98,10 @@ add_library(${XKOMP} SHARED ${SOURCE_FILES})
 
 # flags
 if(UNIX AND NOT APPLE)
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${VERSION_SCRIPT}")
+    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/abi.map")
+    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/gomp/abi.map")
+    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/kmp/abi.map")
+    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/xkomp/abi.map")
 endif()
 
 # Include directory
