@@ -1,5 +1,18 @@
 VERSION {
     global:
+        omp_get_thread_num;
+        omp_get_num_threads;
+        omp_get_max_threads;
+
+        omp_set_default_device;
+        omp_get_default_device;
+        omp_get_num_devices;
+        omp_get_device_num;
+        omp_get_initial_device;
+        omp_is_initial_device;
+
+        omp_get_wtime;
+
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
         __kmpc_omp_task_alloc_with_deps;
@@ -22,19 +35,6 @@ VERSION {
 
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;
-
-        omp_get_thread_num;
-        omp_get_num_threads;
-        omp_get_max_threads;
-
-        omp_set_default_device;
-        omp_get_default_device;
-        omp_get_num_devices;
-        omp_get_device_num;
-        omp_get_initial_device;
-        omp_is_initial_device;
-
-        omp_get_wtime;
 
         xkomp_get;
         xkomp_current_task;

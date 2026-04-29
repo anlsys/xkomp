@@ -31,20 +31,21 @@ set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
 
 SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/api.cc
-    ${CMAKE_SOURCE_DIR}/src/barrier.cc
     ${CMAKE_SOURCE_DIR}/src/device.cc
     ${CMAKE_SOURCE_DIR}/src/env.cc
-    ${CMAKE_SOURCE_DIR}/src/for.cc
-    ${CMAKE_SOURCE_DIR}/src/fork.cc
-    ${CMAKE_SOURCE_DIR}/src/master.cc
-    ${CMAKE_SOURCE_DIR}/src/single.cc
-    ${CMAKE_SOURCE_DIR}/src/task.cc
-    ${CMAKE_SOURCE_DIR}/src/taskgraph.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/barrier.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/for.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/fork.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/master.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/single.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/thread.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/task.cc
+    ${CMAKE_SOURCE_DIR}/src/xkomp/taskgraph.cc
 )
 
 # if target is enabled, add sources
 if (SUPPORT_TARGET)
-    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/target/api.cc)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/target/api.cc)
 endif()
 
 #########
