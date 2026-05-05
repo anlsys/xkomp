@@ -1,0 +1,18 @@
+OMP_VERSION {
+    global:
+        omp_get_thread_num;
+        omp_get_num_threads;
+        omp_get_max_threads;
+
+        omp_set_default_device;
+        omp_get_default_device;
+        omp_get_num_devices;
+        omp_get_device_num;
+        omp_get_initial_device;
+        omp_is_initial_device;
+
+        omp_get_wtime;
+
+    local:
+        *;
+};

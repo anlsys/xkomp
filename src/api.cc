@@ -1,6 +1,5 @@
 # include <xkomp/xkomp.h>
 # include <xkomp/support.h>
-# include <xkomp/kmp.h>
 
 # include <xkrt/logger/logger.h>
 # include <stdint.h>
@@ -22,21 +21,6 @@ xkomp_get(void)
     }
 
     return xkomp;
-}
-
-extern "C"
-kmp_int32
-__kmpc_global_thread_num(ident_t * loc)
-{
-    (void) loc;
-
-    // ensure runtime is initialized
-    xkomp_get();
-
-    thread_t * tls = thread_t::get_tls();
-    assert(tls);
-
-    return tls->gtid;
 }
 
 /////////////////////////
@@ -67,7 +51,17 @@ extern "C"
 int
 omp_get_max_threads(void)
 {
-    return MIN(xkomp->env.OMP_NUM_THREADS, xkomp->env.OMP_THREAD_LIMIT);
+    int nthreads = xkomp->env.OMP_NUM_THREADS;
+    if (nthreads == 0)
+    {
+        hwloc_topology_t topology;
+
+        hwloc_topology_init(&topology);
+        hwloc_topology_load(topology);
+        nthreads = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_CORE);
+        hwloc_topology_destroy(topology);
+    }
+    return MIN(nthreads, xkomp->env.OMP_THREAD_LIMIT);
 }
 
 extern "C"
@@ -96,5 +90,3 @@ __xkomp_teardown(void)
     free(xkomp);
     xkomp = NULL;
 }
-
-

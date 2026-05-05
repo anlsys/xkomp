@@ -22,8 +22,8 @@ xkomp_env_init_parse_convert<char>(const char * const value)
 }
 
 template <>
-char *
-xkomp_env_init_parse_convert<char *>(const char * const value)
+const char *
+xkomp_env_init_parse_convert<const char *>(const char * const value)
 {
     return strdup(value);
 }
@@ -53,11 +53,11 @@ xkomp_env_init(xkomp_env_t * env)
 {
     // parse env variables
     # define F(T, S, D) xkomp_env_init_parse<T>(&env->S, #S, D)
-    F(char,     OMP_DISPLAY_ENV,    'f');   // true, false or verbose ('t', 'f' or 'v')
-    F(int,      OMP_NUM_THREADS,    0);
-    F(int,      OMP_THREAD_LIMIT,   INT_MAX);
-    F(char *,   OMP_PLACES,         "cores");
-    F(char *,   OMP_PROC_BIND,      "close");
+    F(char,         OMP_DISPLAY_ENV,    'f');   // true, false or verbose ('t', 'f' or 'v')
+    F(int,          OMP_NUM_THREADS,    0);
+    F(int,          OMP_THREAD_LIMIT,   INT_MAX);
+    F(const char *, OMP_PLACES,         "cores");
+    F(const char *, OMP_PROC_BIND,      "close");
     # undef F
 
     // maybe display

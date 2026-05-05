@@ -20,5 +20,7 @@ extern "C"
 void
 __kmpc_end_single(ident_t *loc, kmp_int32 global_tid)
 {
-
+    xkomp_t * omp = xkomp_get();
+    assert(omp);
+    omp->runtime.task_wait();
 }

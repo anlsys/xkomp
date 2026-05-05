@@ -4,6 +4,10 @@
 # include <stdint.h>
 # include <stdlib.h>
 
+int __kmp_invoke_microtask(
+    void (*pkfn) (int * global_tid, int * bound_tid, ...),
+    int gtid, int npr, int argc, void *argv[] );
+
 typedef char kmp_int8;
 typedef unsigned char kmp_uint8;
 typedef short kmp_int16;
