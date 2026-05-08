@@ -12,7 +12,9 @@
 //      - the same single thread creates and replay the taskgraph record
 //
 
-# if 1
+# define USE_TASKGRAPH 1
+
+# if USE_TASKGRAPH
 #  include <xkomp/xkomp.h>
 #  include <xkomp/xkomp++.h>
 XKRT_NAMESPACE_USE;
@@ -25,12 +27,13 @@ main(void)
 
     const int ndevices = omp_get_num_devices() - 1;
     assert(ndevices);
-    printf("Running on %d devices\n", ndevices);
 
     constexpr size_t size = 16;
     const     size_t bs   = size / ndevices;
     const     float  alpha = 0.7f;
     assert(size % bs == 0);
+
+    printf("Running on %d devices with total size %zu of block size %zu\n", ndevices, size, bs);
 
     float * x = (float *) malloc(sizeof(float) * size);
     float * y = (float *) malloc(sizeof(float) * size);
@@ -61,10 +64,10 @@ main(void)
 
             printf("Number of devices (excluding host): %d\n", ndevices);
             int iter;
-            for (iter = 0 ; iter < 5 ; ++iter)
+            for (iter = 0 ; iter < 2 ; ++iter)
             {
                 double t0 = omp_get_wtime();
-                # if 1
+                # if USE_TASKGRAPH
                 constexpr xkomp_taskgraph_id_t graph_id = 0;
                 constexpr xkomp_taskgraph_flags_t flags = XKOMP_TASKGRAPH_FLAG_NONE;
                 pragma_omp_taskgraph(graph_id, flags, [&] (void)
@@ -92,7 +95,7 @@ main(void)
                     # pragma omp task depend(in: x)
                         {}
                 }
-                # if 1
+                # if USE_TASKGRAPH
                 );
                 # endif
 
