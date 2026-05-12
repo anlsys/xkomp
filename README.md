@@ -23,8 +23,12 @@ clang -fopenmp main.c -o main -lxkomp
 
 # Bits of history
 XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)
-This repo is a prototype implementation of OpenMP, with partial support for taskgraphs (6.0) and extensions for dataflow, on top of XKRT.
+This repo is an abstraction layer to OpenMP through LLVM and GCC ABIs.
+It partial support of OpenMP 6.0 on taskgraphs (6.0) and original extensions for multi-devices dataflow.
 
-A previous implementation of OpenMP on top of XKaapi is available here:
+If you are looking for the old version of kaapi/komp, refer to:
 - https://gitlab.inria.fr/openmp/kaapi
 - https://gitlab.inria.fr/openmp/libkomp
+
+# References
+R.Pereira eta l. XKRT: a Runtime System for Macro-Dataflow Programming on Multi-Devices Architectures. DOI: 10.2139/ssrn.6460634
