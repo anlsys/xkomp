@@ -31,4 +31,4 @@ If you are looking for the old version of kaapi/komp, refer to:
 - https://gitlab.inria.fr/openmp/libkomp
 
 # References
-R.Pereira eta l. XKRT: a Runtime System for Macro-Dataflow Programming on Multi-Devices Architectures. DOI: 10.2139/ssrn.6460634
+[1] XKRT: a Runtime System for Macro-Dataflow Programming on Multi-Devices Architectures. DOI: 10.2139/ssrn.6460634
