@@ -379,7 +379,7 @@ __kmpc_omp_task_with_deps_v2(
             if (acs_list[i].flags.write || acs_list[i].flags.storage)
                 mode = (access_mode_t) (mode | ACCESS_MODE_W);
 
-            if (acs_list[i].flags.virtual)
+            if (acs_list[i].flags.virt)
                 mode = (access_mode_t) (mode | ACCESS_MODE_V);
 
             new (accesses + access_idx++) access_t(task, ptr, n, sizeof_type, mode, concurrency, scope);

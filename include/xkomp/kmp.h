@@ -249,7 +249,7 @@ typedef struct kmp_access_info {
         bool read    : 1;
         bool write   : 1;
         bool storage : 1;
-        bool virtual : 1;
+        bool virt    : 1;
         bool unused  : 4;
     } flags;
 } kmp_access_info_t;
