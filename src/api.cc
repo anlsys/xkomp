@@ -23,6 +23,26 @@ xkomp_get(void)
     return xkomp;
 }
 
+extern "C"
+void *
+xkomp_access_pointer(int idx)
+{
+    thread_t * thread = thread_t::get_tls();
+    assert(thread);
+
+    task_t * task = thread->current_task;
+    assert(task);
+    assert(task->flags & TASK_FLAG_ACCESSES);
+
+    access_t * accesses = TASK_ACCESSES(task);
+    assert(accesses);
+
+    access_t * access = accesses + idx;
+    assert(access->type == ACCESS_TYPE_SEGMENT);
+
+    return (void *) access->device_view.addr;
+}
+
 /////////////////////////
 // STANDARD OPENMP API //
 /////////////////////////
