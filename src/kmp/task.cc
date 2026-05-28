@@ -141,6 +141,7 @@ task_alloc(
     size_t sizeof_kmp_task_t,
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry,
+    kmp_int32 ndeps,
     kmp_int32 nacs,
     kmp_int32 device_id
 ) {
@@ -151,7 +152,8 @@ task_alloc(
     static_assert(XKRT_HOST_DEVICE_UNIQUE_ID == 0);
     device_unique_id_t device_unique_id = omp_device_id_to_xkomp(device_id);
 
-    assert(nacs <= XKRT_TASK_MAX_ACCESSES);
+    const kmp_int32 naccesses = ndeps + nacs;
+    assert(naccesses <= XKRT_TASK_MAX_ACCESSES);
 
     thread_t * thread = thread_t::get_tls();
     assert(thread);
@@ -163,7 +165,7 @@ task_alloc(
     task_flag_bitfield_t xkflags  = TASK_FLAG_ZERO;
 
     // if tasks has accesses, set flag
-    if (nacs)
+    if (naccesses)
         xkflags |= TASK_FLAG_ACCESSES;
 
     // if task is not running on the host, set device/detachable flags, since libomptarget may submit commands
@@ -178,14 +180,14 @@ task_alloc(
 
     // see llvm impl
     const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
-    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, NULL, args_size, nacs);
+    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, NULL, args_size, naccesses);
     assert(task);
 
     // init acs infos
-    if (nacs)
+    if (naccesses)
     {
         task_acs_info_t * acs = TASK_ACS_INFO(task);
-        new (acs) task_acs_info_t(nacs);
+        new (acs) task_acs_info_t(naccesses);
     }
 
     // init dev/det infos
@@ -229,9 +231,11 @@ __kmpc_omp_task_alloc_with_deps(
     size_t sizeof_kmp_task_t,
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry,
+    kmp_int32 ndeps,
     kmp_int32 nacs
 ) {
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, nacs, -1);
+    constexpr kmp_int32 device_id = -1;
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
 extern "C"
@@ -244,6 +248,7 @@ __kmpc_omp_target_task_alloc_with_deps(
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry,
     kmp_int64 device_id,
+    kmp_int32 ndeps,
     kmp_int32 nacs
 ) {
     // target task is untied defined in the specification
@@ -251,7 +256,7 @@ __kmpc_omp_target_task_alloc_with_deps(
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
 extern "C"
@@ -266,8 +271,9 @@ __kmpc_omp_target_task_alloc(
     kmp_int64 device_id
 ) {
     LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
-    constexpr kmp_int32 nacs = 0;
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, nacs, device_id);
+    constexpr kmp_int32 ndeps = 0;
+    constexpr kmp_int32 nacs  = 0;
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
 extern "C"
@@ -281,9 +287,10 @@ __kmpc_omp_task_alloc(
     kmp_routine_entry_t task_entry
 ) {
     LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
-    constexpr kmp_int32 nacs = 0;
+    constexpr kmp_int32 ndeps = 0;
+    constexpr kmp_int32 nacs  = 0;
     constexpr kmp_int32 device_id = -1;
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
 extern "C"
@@ -322,9 +329,9 @@ __kmpc_omp_task(
 @param gtid Global Thread ID of encountering thread
 @param ktask task thunk allocated by __kmp_omp_task_alloc() for the ''new
 task''
-@param nacs Number of depend items with possible aliasing
+@param ndeps Number of depend items with possible aliasing
 @param dep_list List of depend items with possible aliasing
-@param nacs_noalias Number of depend items with no aliasing
+@param ndeps_noalias Number of depend items with no aliasing
 @param noalias_dep_list List of depend items with no aliasing
 
 @return Returns either TASK_CURRENT_NOT_QUEUED if the current task was not
@@ -334,72 +341,118 @@ Schedule a non-thread-switchable task with dependences for execution
 */
 extern "C"
 kmp_int32
-__kmpc_omp_task_with_deps(
+__kmpc_omp_task_with_deps_v2(
     ident_t * loc_ref,
     kmp_int32 gtid,
     kmp_task_t * ktask,
-    kmp_int32 nacs,
+    kmp_int32 ndeps,
     kmp_depend_info_t * dep_list,
-    kmp_int32 nacs_noalias,
-    kmp_depend_info_t * noalias_dep_list
+    kmp_int32 ndeps_noalias,
+    kmp_depend_info_t * noalias_dep_list,
+    kmp_int32 nacs,
+    kmp_access_info_t * acs_list
 ) {
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
-    assert(nacs <= XKRT_TASK_MAX_ACCESSES);
+    assert(ndeps <= XKRT_TASK_MAX_ACCESSES);
     task_t * task = task_from_ktask(ktask);
 
-    if (nacs)
+    access_t * accesses = TASK_ACCESSES(task);
+    kmp_int32 access_idx = 0;
+
+    /* access clause */
+    for (kmp_int32 i = 0; i < nacs ; ++i)
     {
-        // set accesses
-        access_t * accesses = TASK_ACCESSES(task);
-        for (int i = 0; i < nacs ; ++i)
+        const void             * ptr = (const void *) acs_list[i].base_addr;
+        const size_t               n = (size_t) acs_list[i].len;
+        constexpr size_t sizeof_type = 1;
+        if (ptr)
         {
-            const void * ptr = (const void *) dep_list[i].base_addr;
-            if (ptr)
-            {
-                access_mode_t           mode        = ACCESS_MODE_V;
-                access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-                access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
+            access_mode_t           mode        = (access_mode_t) 0;
+            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
 
-                if (dep_list[i].flags.in)
-                {
-                    mode = (access_mode_t) (mode | ACCESS_MODE_R);
-                    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-                }
-                if (dep_list[i].flags.out)
-                {
-                    mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-                }
-                if (dep_list[i].flags.mtx)
-                {
-                    mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                    concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
-                }
-                if (dep_list[i].flags.set)
-                {
-                    mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                    concurrency = ACCESS_CONCURRENCY_CONCURRENT;
-                }
-                if (dep_list[i].flags.all)
-                {
-                    LOGGER_FATAL("Not implemented");
-                }
+            if (acs_list[i].flags & KMP_ACCESS_MODE_READ)
+                mode = (access_mode_t) (mode | ACCESS_MODE_R);
 
-                new (accesses + i) access_t(task, ptr, mode, concurrency, scope);
-            }
+            if (acs_list[i].flags & KMP_ACCESS_MODE_WRITE)
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+
+            if (acs_list[i].flags & KMP_ACCESS_MODE_STORAGE)
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+
+            if (acs_list[i].flags & KMP_ACCESS_MODE_VIRTUAL)
+                mode = (access_mode_t) (mode | ACCESS_MODE_V);
+
+            new (accesses + access_idx++) access_t(task, ptr, n, sizeof_type, mode, concurrency, scope);
         }
-
-        // process deps
-        xkomp->runtime.task_accesses_resolve(accesses, nacs);
     }
+
+    /* depend clause */
+    for (kmp_int32 i = 0; i < ndeps ; ++i)
+    {
+        const void * ptr = (const void *) dep_list[i].base_addr;
+        if (ptr)
+        {
+            access_mode_t           mode        = ACCESS_MODE_V;
+            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
+
+            if (dep_list[i].flags.in)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_R);
+                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            }
+            if (dep_list[i].flags.out)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            }
+            if (dep_list[i].flags.mtx)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
+            }
+            if (dep_list[i].flags.set)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+            }
+            if (dep_list[i].flags.all)
+            {
+                LOGGER_FATAL("Not implemented");
+            }
+
+            new (accesses + access_idx++) access_t(task, ptr, mode, concurrency, scope);
+            }
+    }
+
+    // process deps
+    if (ndeps + nacs)
+        xkomp->runtime.task_accesses_resolve(accesses, ndeps + nacs);
 
     xkomp->runtime.task_commit(task);
 
     # define TASK_CURRENT_NOT_QUEUED    0
     # define TASK_CURRENT_QUEUED        1
     return TASK_CURRENT_QUEUED;
+}
+
+
+
+extern "C"
+kmp_int32
+__kmpc_omp_task_with_deps(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_task_t * ktask,
+    kmp_int32 ndeps,
+    kmp_depend_info_t * dep_list,
+    kmp_int32 ndeps_noalias,
+    kmp_depend_info_t * noalias_dep_list
+) {
+    return __kmpc_omp_task_with_deps_v2(loc_ref, gtid, ktask, ndeps, dep_list, ndeps_noalias, noalias_dep_list, 0, NULL);
 }
 
 extern "C"

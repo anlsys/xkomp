@@ -240,4 +240,19 @@ typedef struct kmp_depend_info {
   } flags;
 } kmp_depend_info_t;
 
+/* Extensions */
+
+typedef struct kmp_access_info {
+    intptr_t base_addr;
+    size_t   len;
+    unsigned flags;
+} kmp_access_info_t;
+
+typedef enum kmp_access_info_flag_t {
+    KMP_ACCESS_MODE_READ    = 0x10,
+    KMP_ACCESS_MODE_WRITE   = 0x20,
+    KMP_ACCESS_MODE_STORAGE = 0x40,
+    KMP_ACCESS_MODE_VIRTUAL = 0x80,
+} kmp_access_info_flag_t;
+
 #endif /* __KMP_H__ */
