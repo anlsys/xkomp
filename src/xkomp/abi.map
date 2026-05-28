@@ -6,6 +6,7 @@ XKOMP_VERSION {
         xkomp_parallel;
         xkomp_taskgraph_begin;
         xkomp_taskgraph_end;
+        xkomp_access_pointer;
 
     local:
         *;
