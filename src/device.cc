@@ -23,7 +23,7 @@ int
 omp_get_num_devices(void)
 {
     xkomp_t * xkomp = xkomp_get();
-    return xkomp->runtime.get_ndevices();
+    return xkomp->runtime.get_ndevices() - 1;
 }
 
 extern "C"
@@ -55,7 +55,10 @@ extern "C"
 xkrt_device_unique_id_t
 omp_device_id_to_xkomp(int device_id)
 {
-    return (device_id + 1) % omp_get_num_devices();
+    static_assert(XKRT_HOST_DEVICE_UNIQUE_ID == 0);
+    if (device_id == omp_get_initial_device())
+        return XKRT_HOST_DEVICE_UNIQUE_ID;
+    return 1 + (device_id % omp_get_num_devices());
 }
 
 extern "C"

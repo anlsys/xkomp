@@ -187,7 +187,7 @@ task_alloc(
     if (naccesses)
     {
         task_acs_info_t * acs = TASK_ACS_INFO(task);
-        new (acs) task_acs_info_t(naccesses);
+        new (acs) task_acs_info_t(thread, naccesses);
     }
 
     // init dev/det infos
@@ -234,7 +234,7 @@ __kmpc_omp_task_alloc_with_deps(
     kmp_int32 ndeps,
     kmp_int32 nacs
 ) {
-    constexpr kmp_int32 device_id = -1;
+    const kmp_int32 device_id = omp_get_initial_device();
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
@@ -289,7 +289,7 @@ __kmpc_omp_task_alloc(
     LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
     constexpr kmp_int32 ndeps = 0;
     constexpr kmp_int32 nacs  = 0;
-    constexpr kmp_int32 device_id = -1;
+    const kmp_int32 device_id = omp_get_initial_device();
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
 }
 
