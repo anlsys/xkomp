@@ -187,7 +187,12 @@ task_alloc(
     if (naccesses)
     {
         task_acs_info_t * acs = TASK_ACS_INFO(task);
-        new (acs) task_acs_info_t(thread, naccesses);
+
+        // if spawning a device task, set spawning_thread so that
+        // successor tasks are pushed to it
+        thread_t * spawning_thread = (device_unique_id != XKRT_HOST_DEVICE_UNIQUE_ID) ? thread : NULL;
+
+        new (acs) task_acs_info_t(spawning_thread, naccesses);
     }
 
     // init dev/det infos
