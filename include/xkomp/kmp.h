@@ -246,12 +246,13 @@ typedef struct kmp_access_info {
     intptr_t base_addr;
     size_t   len;
     struct {
-        bool read        : 1;
-        bool write       : 1;
-        bool storage     : 1;
-        bool noncoherent : 1;
-        bool concurrent  : 1;
-        bool unused      : 3;
+        bool read               : 1;
+        bool write              : 1;
+        bool storage            : 1;
+        bool nostorage          : 1;
+        bool noncoherent        : 1;
+        bool concurrentwrite    : 1;
+        bool unused             : 2;
     } flags;
 } kmp_access_info_t;
 

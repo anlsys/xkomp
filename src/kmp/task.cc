@@ -378,17 +378,27 @@ __kmpc_omp_task_with_deps_v2(
             access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
             access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
 
+            if (acs_list[i].flags.storage)
+            {
+                acs_list[i].flags.write = 1;
+                acs_list[i].flags.noncoherent = 1;
+            }
+
             if (acs_list[i].flags.read)
                 mode = (access_mode_t) (mode | ACCESS_MODE_R);
 
-            if (acs_list[i].flags.write || acs_list[i].flags.storage)
+            if (acs_list[i].flags.write || acs_list[i].flags.concurrentwrite)
+            {
                 mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                if (acs_list[i].flags.concurrentwrite)
+                    concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+            }
 
             if (acs_list[i].flags.noncoherent)
                 mode = (access_mode_t) (mode | ACCESS_MODE_V);
 
-            if (acs_list[i].flags.concurrent)
-                concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+            if (acs_list[i].flags.nostorage)
+                LOGGER_FATAL("XKRT does not support the no-storage modifier yet");
 
             new (accesses + access_idx++) access_t(task, ptr, n, sizeof_type, mode, concurrency, scope);
         }
