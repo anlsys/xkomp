@@ -190,7 +190,7 @@ task_alloc(
 
         // if spawning a device task, set spawning_thread so that
         // successor tasks are pushed to it
-        thread_t * spawning_thread = (device_unique_id != XKRT_HOST_DEVICE_UNIQUE_ID) ? thread : NULL;
+        thread_t * spawning_thread = (device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID) ? thread : NULL;
 
         new (acs) task_acs_info_t(spawning_thread, naccesses);
     }
@@ -439,8 +439,9 @@ __kmpc_omp_task_with_deps_v2(
                 LOGGER_FATAL("Not implemented");
             }
 
+            // new (accesses + access_idx++) access_t(task, ptr, 1, 1, mode, concurrency, scope);
             new (accesses + access_idx++) access_t(task, ptr, mode, concurrency, scope);
-            }
+        }
     }
 
     // process deps

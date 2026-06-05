@@ -1,5 +1,7 @@
-KMP_VERSION {
+VERSION {
     global:
+        __kmpc_alloc;
+        __kmpc_free;
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
         __kmpc_omp_task_alloc_with_deps;
@@ -23,6 +25,10 @@ KMP_VERSION {
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;
         __kmpc_omp_taskwait_deps_51_v2;
+        __kmpc_omp_wait_deps;
+        __kmpc_omp_get_target_async_handle_ptr;
+
+        omp_get_default_device;
 
     local:
         *;

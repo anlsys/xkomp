@@ -99,10 +99,16 @@ add_library(${XKOMP} SHARED ${SOURCE_FILES})
 
 # flags
 if(UNIX AND NOT APPLE)
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/gomp/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/kmp/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/xkomp/abi.map")
+    set(ABI_MAP_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gomp/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kmp/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/xkomp/abi.map"
+    )
+    foreach(map_file ${ABI_MAP_FILES})
+        target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${map_file}")
+    endforeach()
+    set_target_properties(${XKOMP} PROPERTIES LINK_DEPENDS "${ABI_MAP_FILES}")
 endif()
 
 # Include directory
