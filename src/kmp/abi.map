@@ -25,6 +25,7 @@ VERSION {
         __kmpc_omp_taskwait;
         __kmpc_fork_call;
         __kmpc_for_static_init_4;
+        __kmpc_for_static_init_4u;
         __kmpc_for_static_init_8;
         __kmpc_for_static_init_8u;
         __kmpc_for_static_fini;
