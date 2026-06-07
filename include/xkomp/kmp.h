@@ -256,4 +256,17 @@ typedef struct kmp_access_info {
     } flags;
 } kmp_access_info_t;
 
+int
+__kmp_omp_target_memcpy_async(
+    void * dst_ptr,
+    const void * src_ptr,
+    size_t length,
+    size_t dst_offset,
+    size_t src_offset,
+    int dst_device_num,
+    int src_device_num,
+    int depobj_count,
+    void * depobj_list
+);
+
 #endif /* __KMP_H__ */

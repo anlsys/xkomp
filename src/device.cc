@@ -65,48 +65,20 @@ EXPORT_OMP_ABI(is_initial_device);
 extern "C"
 int
 xkomp_target_memcpy_async(
-    void *dst,
-    const void *src,
+    void * dst,
+    const void * src,
     size_t length,
     size_t dst_offset,
     size_t src_offset,
     int dst_device_num,
     int src_device_num,
     int depobj_count,
-    omp_depend_t *depobj_list
+    omp_depend_t * depobj_list
 ) {
-    /* TODO: implement */
-    LOGGER_NOT_IMPLEMENTED();
+    LOGGER_FATAL("Not implemented");
     return -1;
 }
-
-/**
- * OMP_API_VERSION entry point for omp_target_memcpy_async.
- * This is the default-versioned symbol for direct user calls
- * against xkomp's omp.h / omp_depend_t.
- *
- * extern "C" prevents C++ name mangling so .symver can reference
- * the symbol by its plain name.  The version script's local: *
- * hides the unversioned __xkomp_omp_target_memcpy_async symbol.
- */
-extern "C" int
-__xkomp_omp_target_memcpy_async(
-    void *dst,
-    const void *src,
-    size_t length,
-    size_t dst_offset,
-    size_t src_offset,
-    int dst_device_num,
-    int src_device_num,
-    int depobj_count,
-    omp_depend_t *depobj_list
-) {
-    /* TODO: translate omp_depend_t to xkomp format */
-    return xkomp_target_memcpy_async(dst, src, length, dst_offset, src_offset,
-                                     dst_device_num, src_device_num,
-                                     depobj_count, depobj_list);
-}
-__asm__(".symver __xkomp_omp_target_memcpy_async, omp_target_memcpy_async@@OMP_API_VERSION");
+EXPORT_OMP_ABI(target_memcpy_async);
 
 /////////////////////
 // XKOMP EXTENSION //

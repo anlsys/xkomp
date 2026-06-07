@@ -38,7 +38,7 @@ extern "C"
     DECLARE_OMP_ABI(int,  is_initial_device, void);
 
     // target memory
-    int xkomp_target_memcpy_async(
+    DECLARE_OMP_ABI(int, xkomp_target_memcpy_async,
         void *dst,
         const void *src,
         size_t length,
@@ -49,6 +49,10 @@ extern "C"
         int depobj_count,
         omp_depend_t *depobj_list
     );
+
+    // TODO: currently in libomptarget, should be moved to xkomp
+    void * omp_get_mapped_ptr(const void * ptr, int device_num);
+
 };
 
 #undef DECLARE_OMP_ABI

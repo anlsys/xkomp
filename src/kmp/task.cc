@@ -172,7 +172,7 @@ task_alloc(
     if (device_unique_id != XKRT_HOST_DEVICE_UNIQUE_ID)
     {
         xkflags |= TASK_FLAG_DEVICE;        // execute on a device thread
-        xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit cmductions
+        xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit commands
     }
 
     // if recording flag is set on parent, record that task.
