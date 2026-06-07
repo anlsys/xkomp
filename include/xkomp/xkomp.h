@@ -5,10 +5,27 @@
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
 
-/* Export both version for XKOMP standard ABI and KMP */
-#define EXPORT_OMP_ABI(api_func) \
-    __asm__(".symver " #api_func ", " #api_func "@@OMP_API_VERSION"); \
-    __asm__(".symver " #api_func ", " #api_func "@VERSION")
+/**
+ * EXPORT_OMP_ABI(suffix)
+ *
+ * Place this macro after a function defined as `xkomp_<suffix>(...)`.
+ * It automatically exports three symbols from a single implementation:
+ *
+ *   1. xkomp_<suffix>          — native XKOMP symbol
+ *   2. omp_<suffix>@VERSION    — KMP-compatible versioned symbol
+ *   3. omp_<suffix>@@OMP_API_VERSION — default OMP API versioned symbol
+ *
+ * Example:
+ *   extern "C" int xkomp_get_num_threads(void) { ... }
+ *   EXPORT_OMP_ABI(get_num_threads);
+ */
+#define EXPORT_OMP_ABI(suffix) \
+    extern "C" __typeof__(xkomp_##suffix) __omp_api_##suffix \
+        __attribute__((alias("xkomp_" #suffix))); \
+    __asm__(".symver __omp_api_" #suffix ", omp_" #suffix "@@OMP_API_VERSION"); \
+    extern "C" __typeof__(xkomp_##suffix) __omp_kmp_##suffix \
+        __attribute__((alias("xkomp_" #suffix))); \
+    __asm__(".symver __omp_kmp_" #suffix ", omp_" #suffix "@VERSION")
 
 XKRT_NAMESPACE_USE;
 

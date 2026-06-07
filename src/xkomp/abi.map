@@ -1,5 +1,6 @@
 XKOMP_VERSION {
     global:
+        /* xkomp-specific extensions */
         omp_device_id_to_xkomp;
         xkomp_device_unique_id_to_omp;
         xkomp_get;
@@ -7,6 +8,18 @@ XKOMP_VERSION {
         xkomp_taskgraph_begin;
         xkomp_taskgraph_end;
         xkomp_access_pointer;
+
+        /* xkomp_* aliases for the standard OMP API */
+        xkomp_get_thread_num;
+        xkomp_get_num_threads;
+        xkomp_get_max_threads;
+        xkomp_get_wtime;
+        xkomp_set_default_device;
+        xkomp_get_default_device;
+        xkomp_get_num_devices;
+        xkomp_get_device_num;
+        xkomp_get_initial_device;
+        xkomp_is_initial_device;
 
     local:
         *;

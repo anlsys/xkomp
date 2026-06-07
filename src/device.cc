@@ -6,56 +6,56 @@
 
 extern "C"
 void
-omp_set_default_device(int device)
+xkomp_set_default_device(int device)
 {
     LOGGER_NOT_IMPLEMENTED();
 }
-EXPORT_OMP_ABI(omp_set_default_device);
+EXPORT_OMP_ABI(set_default_device);
 
 extern "C"
 int
-omp_get_default_device(void)
+xkomp_get_default_device(void)
 {
     return 0;
 }
-EXPORT_OMP_ABI(omp_get_default_device);
+EXPORT_OMP_ABI(get_default_device);
 
 extern "C"
 int
-omp_get_num_devices(void)
+xkomp_get_num_devices(void)
 {
     xkomp_t * xkomp = xkomp_get();
     return xkomp->runtime.get_ndevices() - 1;
 }
-EXPORT_OMP_ABI(omp_get_num_devices);
+EXPORT_OMP_ABI(get_num_devices);
 
 extern "C"
-int omp_get_initial_device(void);
+int xkomp_get_initial_device(void);
 
 extern "C"
 int
-omp_get_device_num(void)
+xkomp_get_device_num(void)
 {
     thread_t * thread = thread_t::get_tls();
-    return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? omp_get_initial_device() : thread->device_unique_id - 1);
+    return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? xkomp_get_initial_device() : thread->device_unique_id - 1);
 }
-EXPORT_OMP_ABI(omp_get_device_num);
+EXPORT_OMP_ABI(get_device_num);
 
 extern "C"
 int
-omp_get_initial_device(void)
+xkomp_get_initial_device(void)
 {
-    return omp_get_num_devices();
+    return xkomp_get_num_devices();
 }
-EXPORT_OMP_ABI(omp_get_initial_device);
+EXPORT_OMP_ABI(get_initial_device);
 
 extern "C"
 int
-omp_is_initial_device(void)
+xkomp_is_initial_device(void)
 {
-    return omp_get_device_num() == omp_get_initial_device();
+    return xkomp_get_device_num() == xkomp_get_initial_device();
 }
-EXPORT_OMP_ABI(omp_is_initial_device);
+EXPORT_OMP_ABI(is_initial_device);
 
 /////////////////////
 // XKOMP EXTENSION //
@@ -66,14 +66,14 @@ xkrt_device_unique_id_t
 omp_device_id_to_xkomp(int device_id)
 {
     static_assert(XKRT_HOST_DEVICE_UNIQUE_ID == 0);
-    if (device_id == omp_get_initial_device())
+    if (device_id == xkomp_get_initial_device())
         return XKRT_HOST_DEVICE_UNIQUE_ID;
-    return 1 + (device_id % omp_get_num_devices());
+    return 1 + (device_id % xkomp_get_num_devices());
 }
 
 extern "C"
 int
 xkomp_device_unique_id_to_omp(xkrt_device_unique_id_t device_unique_id)
 {
-    return (device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID) ? omp_get_num_devices() : (int) (device_unique_id - 1);
+    return (device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID) ? xkomp_get_num_devices() : (int) (device_unique_id - 1);
 }
