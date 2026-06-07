@@ -56,6 +56,7 @@ omp_get_thread_num(void)
 
     return tls->tid;
 }
+EXPORT_OMP_ABI(omp_get_thread_num);
 
 extern "C"
 int
@@ -66,6 +67,7 @@ omp_get_num_threads(void)
 
     return tls->team->priv.nthreads;
 }
+EXPORT_OMP_ABI(omp_get_thread_num);
 
 extern "C"
 int
@@ -83,6 +85,7 @@ omp_get_max_threads(void)
     }
     return MIN(nthreads, xkomp->env.OMP_THREAD_LIMIT);
 }
+EXPORT_OMP_ABI(omp_get_thread_num);
 
 extern "C"
 double
@@ -90,6 +93,7 @@ omp_get_wtime(void)
 {
     return get_nanotime() / 1.0e9;
 }
+EXPORT_OMP_ABI(omp_get_wtime);
 
 ///////////////////////////////////////
 // init/deinit of the shared library //

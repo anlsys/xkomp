@@ -5,6 +5,11 @@
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
 
+/* Export both version for XKOMP standard ABI and KMP */
+#define EXPORT_OMP_ABI(api_func) \
+    __asm__(".symver " #api_func ", " #api_func "@@OMP_API_VERSION"); \
+    __asm__(".symver " #api_func ", " #api_func "@VERSION")
+
 XKRT_NAMESPACE_USE;
 
 /* environment variables parsed at program starts */

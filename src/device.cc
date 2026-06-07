@@ -10,6 +10,7 @@ omp_set_default_device(int device)
 {
     LOGGER_NOT_IMPLEMENTED();
 }
+EXPORT_OMP_ABI(omp_set_default_device);
 
 extern "C"
 int
@@ -17,6 +18,7 @@ omp_get_default_device(void)
 {
     return 0;
 }
+EXPORT_OMP_ABI(omp_get_default_device);
 
 extern "C"
 int
@@ -25,6 +27,7 @@ omp_get_num_devices(void)
     xkomp_t * xkomp = xkomp_get();
     return xkomp->runtime.get_ndevices() - 1;
 }
+EXPORT_OMP_ABI(omp_get_num_devices);
 
 extern "C"
 int omp_get_initial_device(void);
@@ -36,6 +39,7 @@ omp_get_device_num(void)
     thread_t * thread = thread_t::get_tls();
     return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? omp_get_initial_device() : thread->device_unique_id - 1);
 }
+EXPORT_OMP_ABI(omp_get_device_num);
 
 extern "C"
 int
@@ -43,6 +47,7 @@ omp_get_initial_device(void)
 {
     return omp_get_num_devices();
 }
+EXPORT_OMP_ABI(omp_get_initial_device);
 
 extern "C"
 int
@@ -50,6 +55,11 @@ omp_is_initial_device(void)
 {
     return omp_get_device_num() == omp_get_initial_device();
 }
+EXPORT_OMP_ABI(omp_is_initial_device);
+
+/////////////////////
+// XKOMP EXTENSION //
+/////////////////////
 
 extern "C"
 xkrt_device_unique_id_t

@@ -1,3 +1,4 @@
+# include <xkomp/kmp.h>
 # include <xkomp/xkomp.h>
 # include <xkomp/support.h>
 
@@ -23,4 +24,11 @@ __kmpc_omp_has_task_team(int gtid)
     assert(tls);
     assert(gtid == tls->gtid);
     return tls->team != NULL;
+}
+
+extern "C"
+void **
+__kmpc_omp_get_target_async_handle_ptr(kmp_int32 gtid)
+{
+    return NULL;
 }

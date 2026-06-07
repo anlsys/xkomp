@@ -482,6 +482,13 @@ __kmpc_omp_taskwait(
     return 0;
 }
 
+extern "C"
+void
+__kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
+        kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
+        kmp_depend_info_t *noalias_dep_list) {
+}
+
 void
 xkomp_task_register_format(xkomp_t * xkomp)
 {

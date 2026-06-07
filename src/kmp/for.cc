@@ -39,11 +39,22 @@ __kmpc_for_static_init_4(
     kmp_int32 chunk
 ) {
     assert(schedtype == kmp_sch_static);
-    (void) loc;
-    (void) gtid;
-    (void) schedtype;
-    (void) chunk;
-    (void) pstride;
+    team_t::parallel_for_thread_bounds(plastiter, plower, pupper, incr);
+}
 
+extern "C"
+void
+__kmpc_for_static_init_8u(
+    ident_t * loc,
+    kmp_int32 gtid,
+    kmp_int32 schedtype,
+    kmp_int32 * plastiter,
+    kmp_uint64 * plower,
+    kmp_uint64 * pupper,
+    kmp_int64 * pstride,
+    kmp_int64 incr,
+    kmp_int64 chunk
+) {
+    assert(schedtype == kmp_sch_static);
     team_t::parallel_for_thread_bounds(plastiter, plower, pupper, incr);
 }
