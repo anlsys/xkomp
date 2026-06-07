@@ -1,6 +1,14 @@
 #ifndef __OMP_H__
 # define __OMP_H__
 
+# include <stddef.h>
+
+/**
+ * omp_depend_t -- implementation-defined depend object.
+ * Each ABI (XKOMP, KMP, GOMP) interprets the pointee differently.
+ */
+typedef void * omp_depend_t;
+
 /**
  * For each omp_<suffix> function, declare both the omp_<suffix> and
  * xkomp_<suffix> prototypes.  The actual symbol versioning is handled by
@@ -28,6 +36,19 @@ extern "C"
     DECLARE_OMP_ABI(int,  get_device_num, void);
     DECLARE_OMP_ABI(int,  get_initial_device, void);
     DECLARE_OMP_ABI(int,  is_initial_device, void);
+
+    // target memory
+    int xkomp_target_memcpy_async(
+        void *dst,
+        const void *src,
+        size_t length,
+        size_t dst_offset,
+        size_t src_offset,
+        int dst_device_num,
+        int src_device_num,
+        int depobj_count,
+        omp_depend_t *depobj_list
+    );
 };
 
 #undef DECLARE_OMP_ABI

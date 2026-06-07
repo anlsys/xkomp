@@ -20,6 +20,7 @@ XKOMP_VERSION {
         xkomp_get_device_num;
         xkomp_get_initial_device;
         xkomp_is_initial_device;
+        xkomp_target_memcpy_async;
 
     local:
         *;

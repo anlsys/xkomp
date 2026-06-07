@@ -13,6 +13,8 @@ OMP_API_VERSION {
 
         omp_get_wtime;
 
+        omp_target_memcpy_async;
+
     local:
         *;
 };

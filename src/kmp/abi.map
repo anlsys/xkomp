@@ -11,6 +11,7 @@ VERSION {
         omp_get_initial_device;
         omp_is_initial_device;
         omp_get_wtime;
+        omp_target_memcpy_async;
 
         __kmpc_alloc;
         __kmpc_free;
