@@ -43,6 +43,8 @@ VERSION {
         __kmpc_omp_wait_deps;
         __kmpc_omp_get_target_async_handle_ptr;
 
+        __kmp_omp_target_memcpy_async;
+
     local:
         *;
 };

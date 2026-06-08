@@ -44,6 +44,7 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/kmp/allocator.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/barrier.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/for.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/formats.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/fork.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/master.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/single.cc

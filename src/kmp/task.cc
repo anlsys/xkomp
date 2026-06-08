@@ -180,7 +180,7 @@ task_alloc(
 
     // see llvm impl
     const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
-    task_t * task = xkomp->runtime.task_new(xkomp->task_format, xkflags, NULL, args_size, naccesses);
+    task_t * task = xkomp->runtime.task_new(xkomp->formats.kmp.host, xkflags, NULL, args_size, naccesses);
     assert(task);
 
     // init acs infos
@@ -328,6 +328,100 @@ __kmpc_omp_task(
     return 0;
 }
 
+extern "C"
+void
+__kmp_omp_task_acs_to_xkomp_accesses(
+    task_t * task,
+    access_t * accesses,
+    kmp_access_info_t * acs_list,
+    kmp_int32 nacs
+) {
+    for (kmp_int32 i = 0; i < nacs ; ++i)
+    {
+        const void             * ptr = (const void *) acs_list[i].base_addr;
+        const size_t               n = (size_t) acs_list[i].len;
+        constexpr size_t sizeof_type = 1;
+        if (ptr)
+        {
+            access_mode_t           mode        = (access_mode_t) 0;
+            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
+
+            if (acs_list[i].flags.storage)
+            {
+                acs_list[i].flags.write = 1;
+                acs_list[i].flags.noncoherent = 1;
+            }
+
+            if (acs_list[i].flags.read)
+                mode = (access_mode_t) (mode | ACCESS_MODE_R);
+
+            if (acs_list[i].flags.write || acs_list[i].flags.concurrentwrite)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                if (acs_list[i].flags.concurrentwrite)
+                    concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+            }
+
+            if (acs_list[i].flags.noncoherent)
+                mode = (access_mode_t) (mode | ACCESS_MODE_V);
+
+            if (acs_list[i].flags.nostorage)
+                LOGGER_FATAL("XKRT does not support the no-storage modifier yet");
+
+            new (accesses + i) access_t(task, ptr, n, sizeof_type, mode, concurrency, scope);
+        }
+    }
+}
+
+extern "C"
+void
+__kmp_omp_task_deps_to_xkomp_accesses(
+    task_t * task,
+    access_t * accesses,
+    kmp_depend_info_t * dep_list,
+    kmp_int32 ndeps
+) {
+    for (kmp_int32 i = 0; i < ndeps ; ++i)
+    {
+        const void * ptr = (const void *) dep_list[i].base_addr;
+        if (ptr)
+        {
+            access_mode_t           mode        = ACCESS_MODE_V;
+            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
+
+            if (dep_list[i].flags.in)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_R);
+                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            }
+            if (dep_list[i].flags.out)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
+            }
+            if (dep_list[i].flags.mtx)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
+            }
+            if (dep_list[i].flags.set)
+            {
+                mode = (access_mode_t) (mode | ACCESS_MODE_W);
+                concurrency = ACCESS_CONCURRENCY_CONCURRENT;
+            }
+            if (dep_list[i].flags.all)
+            {
+                LOGGER_FATAL("Not implemented");
+            }
+
+            // new (accesses + access_idx++) access_t(task, ptr, 1, 1, mode, concurrency, scope);
+            new (accesses + i) access_t(task, ptr, mode, concurrency, scope);
+        }
+    }
+}
+
 /*!
 @ingroup TASKING
 @param loc_ref location of the original task directive
@@ -364,85 +458,12 @@ __kmpc_omp_task_with_deps_v2(
     task_t * task = task_from_ktask(ktask);
 
     access_t * accesses = TASK_ACCESSES(task);
-    kmp_int32 access_idx = 0;
 
     /* access clause */
-    for (kmp_int32 i = 0; i < nacs ; ++i)
-    {
-        const void             * ptr = (const void *) acs_list[i].base_addr;
-        const size_t               n = (size_t) acs_list[i].len;
-        constexpr size_t sizeof_type = 1;
-        if (ptr)
-        {
-            access_mode_t           mode        = (access_mode_t) 0;
-            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
-
-            if (acs_list[i].flags.storage)
-            {
-                acs_list[i].flags.write = 1;
-                acs_list[i].flags.noncoherent = 1;
-            }
-
-            if (acs_list[i].flags.read)
-                mode = (access_mode_t) (mode | ACCESS_MODE_R);
-
-            if (acs_list[i].flags.write || acs_list[i].flags.concurrentwrite)
-            {
-                mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                if (acs_list[i].flags.concurrentwrite)
-                    concurrency = ACCESS_CONCURRENCY_CONCURRENT;
-            }
-
-            if (acs_list[i].flags.noncoherent)
-                mode = (access_mode_t) (mode | ACCESS_MODE_V);
-
-            if (acs_list[i].flags.nostorage)
-                LOGGER_FATAL("XKRT does not support the no-storage modifier yet");
-
-            new (accesses + access_idx++) access_t(task, ptr, n, sizeof_type, mode, concurrency, scope);
-        }
-    }
+    __kmp_omp_task_acs_to_xkomp_accesses(task, accesses, acs_list, nacs);
 
     /* depend clause */
-    for (kmp_int32 i = 0; i < ndeps ; ++i)
-    {
-        const void * ptr = (const void *) dep_list[i].base_addr;
-        if (ptr)
-        {
-            access_mode_t           mode        = ACCESS_MODE_V;
-            access_concurrency_t    concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-            access_scope_t          scope       = ACCESS_SCOPE_NONUNIFIED;
-
-            if (dep_list[i].flags.in)
-            {
-                mode = (access_mode_t) (mode | ACCESS_MODE_R);
-                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-            }
-            if (dep_list[i].flags.out)
-            {
-                mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                concurrency = ACCESS_CONCURRENCY_SEQUENTIAL;
-            }
-            if (dep_list[i].flags.mtx)
-            {
-                mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                concurrency = ACCESS_CONCURRENCY_COMMUTATIVE;
-            }
-            if (dep_list[i].flags.set)
-            {
-                mode = (access_mode_t) (mode | ACCESS_MODE_W);
-                concurrency = ACCESS_CONCURRENCY_CONCURRENT;
-            }
-            if (dep_list[i].flags.all)
-            {
-                LOGGER_FATAL("Not implemented");
-            }
-
-            // new (accesses + access_idx++) access_t(task, ptr, 1, 1, mode, concurrency, scope);
-            new (accesses + access_idx++) access_t(task, ptr, mode, concurrency, scope);
-        }
-    }
+    __kmp_omp_task_deps_to_xkomp_accesses(task, accesses + nacs, dep_list, ndeps);
 
     // process deps
     if (ndeps + nacs)
@@ -490,7 +511,7 @@ __kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
 }
 
 void
-xkomp_task_register_format(xkomp_t * xkomp)
+xkomp_task_register_formats_kmp_task(xkomp_t * xkomp)
 {
     task_format_t format;
     memset(&format, 0, sizeof(task_format_t));
@@ -498,5 +519,5 @@ xkomp_task_register_format(xkomp_t * xkomp)
         format.f[i] = (task_format_func_t) body_omp_task_target;
     format.f[XKRT_TASK_FORMAT_TARGET_HOST] = (task_format_func_t) body_omp_task;
     snprintf(format.label, sizeof(format.label), "omp-task");
-    xkomp->task_format = xkomp->runtime.task_format_create(&format);
+    xkomp->formats.kmp.host = xkomp->runtime.task_format_create(&format);
 }

@@ -46,7 +46,12 @@ typedef struct  xkomp_t
     runtime_t runtime;
 
     /* omp task format */
-    task_format_id_t task_format;
+    struct {
+        struct {
+            task_format_id_t host;
+            task_format_id_t target_memcpy_async;
+        } kmp;
+    } formats;
 
     /* environment variables */
     xkomp_env_t env;
@@ -72,7 +77,10 @@ int xkomp_device_unique_id_to_omp(xkrt_device_unique_id_t device_unique_id);
 void xkomp_env_init(xkomp_env_t * env);
 
 /* save task format */
-void xkomp_task_register_format(xkomp_t * xkomp);
+void xkomp_task_register_formats(xkomp_t * xkomp);
+void xkomp_task_register_formats_kmp(xkomp_t * xkomp);
+void xkomp_task_register_formats_kmp_task(xkomp_t * xkomp);
+void xkomp_task_register_formats_kmp_target(xkomp_t * xkomp);
 
 /* microtask max arguments */
 # define XKOMP_MICROTASK_MAX_ARGS 1024

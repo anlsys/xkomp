@@ -16,7 +16,7 @@ xkomp_get(void)
         assert(xkomp);
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
-        xkomp_task_register_format(xkomp);
+        xkomp_task_register_formats(xkomp);
         new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
     }
 
@@ -41,6 +41,16 @@ xkomp_access_pointer(int idx)
     assert(access->type == ACCESS_TYPE_SEGMENT);
 
     return (void *) access->device_view.addr;
+}
+
+//////////////////
+// TASK FORMATS //
+//////////////////
+
+void
+xkomp_task_register_formats(xkomp_t * xkomp)
+{
+    xkomp_task_register_formats_kmp(xkomp);
 }
 
 /////////////////////////
