@@ -2,7 +2,7 @@ extern "C" {
 # include <xkomp/kmp.h>
 };
 
-# include <xkomp/omp.h>
+# include <omp.h>
 # include <xkomp/xkomp.h>
 # include <xkomp/support.h>
 
