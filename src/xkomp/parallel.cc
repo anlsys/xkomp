@@ -117,7 +117,10 @@ xkomp_parallel(
 
     if (team == NULL)
     {
-        // store the team in-place in the small vector (no heap allocation)
+        // store the team in-place in the small vector (no heap allocation).
+        // teams must not move once created (workers hold their address), so we
+        // must stay within the vector's inline capacity.
+        assert(omp->teams.size() < XKOMP_MAX_CACHED_TEAMS);
         xkomp_team_entry_t * entry = omp->teams.emplace_back();
         entry->nthreads = (int) nthreads;
         team = &entry->team;

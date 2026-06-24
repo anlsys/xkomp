@@ -48,6 +48,12 @@ typedef struct  xkomp_team_entry_t
     team_t team;
 }               xkomp_team_entry_t;
 
+/* max number of distinct thread counts cached at once. Teams are stored in-place
+ * in the small vector, so this is its inline capacity: growing beyond it would
+ * relocate the teams and dangle their worker threads. We never expect more than
+ * a couple of distinct thread counts. */
+# define XKOMP_MAX_CACHED_TEAMS 8
+
 /** global variable that holds the entire openmp context */
 typedef struct  xkomp_t
 {
@@ -76,7 +82,7 @@ typedef struct  xkomp_t
      *  threads and reused across regions to avoid respawning pthreads. The
      *  teams live in-place inside the small vector (no heap allocation).
      */
-    small_vector_t<xkomp_team_entry_t> teams;
+    small_vector_t<xkomp_team_entry_t, XKOMP_MAX_CACHED_TEAMS> teams;
 
 }               xkomp_t;
 

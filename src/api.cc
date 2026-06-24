@@ -18,7 +18,7 @@ xkomp_get(void)
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
         new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
-        new (&xkomp->teams) small_vector_t<xkomp_team_entry_t>();
+        new (&xkomp->teams) small_vector_t<xkomp_team_entry_t, XKOMP_MAX_CACHED_TEAMS>();
     }
 
     return xkomp;
