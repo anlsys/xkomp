@@ -109,7 +109,7 @@ body_omp_task(
 
         /* insert a host routine that submit a new task when the command is ready */
         task_command_record_t * cmdrec = rec->commands.put();
-        constexpr ocg::command_type_t ctype = ocg::COMMAND_TYPE_PROG;
+        constexpr cgir::command_type_t ctype = cgir::COMMAND_TYPE_PROG;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
         cmdrec->state = task->state.value;
         new (&cmdrec->command) command_t(ctype, flags);
@@ -117,7 +117,7 @@ body_omp_task(
         cmdrec->command.prog.launcher.fixed.args[0] = runtime;
         cmdrec->command.prog.launcher.fixed.args[1] = task;
         cmdrec->command.prog.launcher.fixed.args[2] = &cmdrec->command;
-        static_assert(OCG_CALLBACK_ARGS_MAX >= 3);
+        static_assert(CGIR_CALLBACK_ARGS_MAX >= 3);
     }
 }
 

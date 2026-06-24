@@ -39,15 +39,15 @@ xkomp_taskgraph_begin(
 
             /* remove useless nodes */
             //  # pragma omp taskgraph optimize(reduce_nodes)
-            taskgraph.cg.optimize(ocg::COMMAND_GRAPH_PASS_REDUCE_NODE);
+            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_REDUCE_NODE);
 
             /* remove redundant edges */
             //  # pragma omp taskgraph optimize(reduce_edges)
-            taskgraph.cg.optimize(ocg::COMMAND_GRAPH_PASS_REDUCE_EDGE);
+            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_REDUCE_EDGE);
 
             /* contract the CG */
             //  # pragma omp taskgraph optimize(batch)
-            taskgraph.cg.optimize(ocg::COMMAND_GRAPH_PASS_BATCH);
+            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_BATCH);
         }
 
         /* replay the CG */
