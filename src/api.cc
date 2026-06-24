@@ -76,7 +76,8 @@ xkomp_get_num_threads(void)
     thread_t * tls = thread_t::get_tls();
     assert(tls);
 
-    return tls->team->priv.nthreads;
+    // outside any parallel region (no team), the spec mandates returning 1
+    return tls->team ? tls->team->priv.nthreads : 1;
 }
 EXPORT_OMP_ABI(get_num_threads);
 
