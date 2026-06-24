@@ -2,6 +2,7 @@
 # define __XKOMP_H__
 
 # include <xkrt/runtime.h>
+# include <xkrt/data-structures/small-vector.h>
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
 
@@ -39,6 +40,14 @@ typedef struct  xkomp_env_t
     const char * OMP_PROC_BIND;
 }               xkomp_env_t;
 
+/* a persistent team cached for `# pragma omp parallel`, reused across regions
+ * that request the same number of threads */
+typedef struct  xkomp_team_entry_t
+{
+    int nthreads;
+    team_t team;
+}               xkomp_team_entry_t;
+
 /** global variable that holds the entire openmp context */
 typedef struct  xkomp_t
 {
@@ -61,6 +70,13 @@ typedef struct  xkomp_t
      *  Parallel init/replay of the same taskgraph is not supported
      */
     std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t> taskgraphs;
+
+    /**
+     *  Persistent teams for `# pragma omp parallel`, cached by number of
+     *  threads and reused across regions to avoid respawning pthreads. The
+     *  teams live in-place inside the small vector (no heap allocation).
+     */
+    small_vector_t<xkomp_team_entry_t> teams;
 
 }               xkomp_t;
 

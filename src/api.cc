@@ -18,6 +18,7 @@ xkomp_get(void)
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
         new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
+        new (&xkomp->teams) small_vector_t<xkomp_team_entry_t>();
     }
 
     return xkomp;
@@ -119,6 +120,13 @@ void __attribute__((destructor))
 __xkomp_teardown(void)
 {
     assert(xkomp);
+
+    // join the cached persistent teams (wakes + reaps their parked workers)
+    // before tearing down the runtime they may still touch
+    for (xkomp_team_entry_t & entry : xkomp->teams)
+        xkomp->runtime.team_join(&entry.team);
+    xkomp->teams.~small_vector_t();
+
     xkomp->runtime.deinit();
     xkomp->taskgraphs.~map();
     free(xkomp);

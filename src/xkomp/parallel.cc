@@ -56,6 +56,22 @@ parse_proc_bind(
     return XKRT_TEAM_BINDING_MODE_COMPACT;
 }
 
+// fill the binding/membership description fields shared by all xkomp teams
+static inline void
+xkomp_team_desc_init(
+    xkomp_t * omp,
+    team_t * team,
+    unsigned int nthreads
+) {
+    team->desc.binding.flags       = XKRT_TEAM_BINDING_FLAG_NONE;
+    team->desc.binding.mode        = parse_proc_bind(omp->env.OMP_PROC_BIND);
+    team->desc.binding.nplaces     = 0;
+    team->desc.binding.places      = parse_places(omp->env.OMP_PLACES);
+    team->desc.binding.places_list = NULL;
+    team->desc.master_is_member    = true;
+    team->desc.nthreads            = nthreads;
+}
+
 // # pragma omp parallel
 extern "C"
 void
@@ -71,23 +87,57 @@ xkomp_parallel(
     if (nthreads > omp->env.OMP_THREAD_LIMIT)
         nthreads = omp->env.OMP_THREAD_LIMIT;
 
-    // create the team
-    team_t team;
-    team.desc.args                = args;
-    team.desc.binding.flags       = XKRT_TEAM_BINDING_FLAG_NONE;
-    team.desc.binding.mode        = parse_proc_bind(omp->env.OMP_PROC_BIND);
-    team.desc.binding.nplaces     = 0;
-    team.desc.binding.places      = parse_places(omp->env.OMP_PLACES);
-    team.desc.binding.places_list = NULL;
-    team.desc.master_is_member    = true;
-    team.desc.nthreads            = nthreads;
-    team.desc.routine             = (team_routine_t) routine;
+    // Nested parallel region: the calling thread already belongs to a team.
+    // Serialize it in the calling thread by running a one-shot team of 1.
+    thread_t * tls = thread_t::get_tls();
+    if (tls->team != NULL)
+    {
+        team_t team;
+        xkomp_team_desc_init(omp, &team, 1);
+        team.desc.args    = args;
+        team.desc.routine = (team_routine_t) routine;
 
-    // spawn the team
-    omp->runtime.team_create(&team);
-    assert(team.priv.threads != NULL);
-    assert(nthreads == 0 || team.priv.nthreads == nthreads);
+        omp->runtime.team_create(&team);
+        omp->runtime.team_join(&team);
+        return ;
+    }
 
-    // wait for completion
-    omp->runtime.team_join(&team);
+    // Top-level parallel region: reuse a cached persistent team with the same
+    // number of threads, or lazily spawn one on first use. Its worker threads
+    // stay parked between regions (routine == XKRT_TEAM_ROUTINE_PARALLEL_FOR).
+    team_t * team = NULL;
+    for (xkomp_team_entry_t & e : omp->teams)
+    {
+        if (e.nthreads == (int) nthreads)
+        {
+            team = &e.team;
+            break ;
+        }
+    }
+
+    if (team == NULL)
+    {
+        // store the team in-place in the small vector (no heap allocation)
+        xkomp_team_entry_t * entry = omp->teams.emplace_back();
+        entry->nthreads = (int) nthreads;
+        team = &entry->team;
+
+        xkomp_team_desc_init(omp, team, nthreads);
+        team->desc.args    = NULL;
+        team->desc.routine = XKRT_TEAM_ROUTINE_PARALLEL_FOR;
+
+        omp->runtime.team_create(team);
+        assert(team->priv.threads != NULL);
+        assert(nthreads == 0 || team->priv.nthreads == (int) nthreads);
+    }
+
+    // dispatch the region body onto the persistent team and wait for completion.
+    // the body's own trailing `team_barrier` (in `routine`) provides the
+    // implicit end-of-region barrier and drains any deferred tasks.
+    team->desc.args = args;
+    omp->runtime.team_parallel_for(team,
+        [omp, routine] (thread_t * thread) {
+            routine(&omp->runtime, thread->team, thread);
+        }
+    );
 }
