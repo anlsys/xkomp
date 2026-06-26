@@ -43,6 +43,49 @@ xkomp_env_init_parse(
 }
 
 /**
+ *  OMP_TASKGRAPH_OPT: comma/space-separated list of cgir command-graph
+ *  optimization passes applied when a recorded taskgraph is optimized.
+ *      - unset      -> default trio (reduce-node, reduce-edge, batch)
+ *      - empty ""   -> no passes (equivalent to "none")
+ *      - "none"     -> no passes
+ *      - otherwise  -> the named passes; unknown names are warned and ignored
+ *  Accepted names are the cgir pass names (see command_graph_pass_to_str):
+ *  "copy-normalize", "copy-fuse", "reduce-node", "reduce-edge", "prog-fuse", "batch".
+ */
+static cgir::command_graph_pass_set_t
+xkomp_env_init_parse_taskgraph_opt(void)
+{
+    const char * value = getenv("OMP_TASKGRAPH_OPT");
+
+    // unset -> default trio
+    if (value == NULL)
+        return cgir::COMMAND_GRAPH_PASS_REDUCE_NODE_BIT
+             | cgir::COMMAND_GRAPH_PASS_REDUCE_EDGE_BIT
+             | cgir::COMMAND_GRAPH_PASS_BATCH_BIT;
+
+    // set (possibly empty) -> parse tokens; an empty string yields no tokens == "none"
+    cgir::command_graph_pass_set_t passes = 0;
+    char * dup = strdup(value);
+    for (char * tok = strtok(dup, ", \t") ; tok != NULL ; tok = strtok(NULL, ", \t"))
+    {
+        if (strcmp(tok, "none") == 0)
+            continue;
+
+        const cgir::command_graph_pass_t pass = cgir::command_graph_pass_from_str(tok);
+        if (pass == cgir::COMMAND_GRAPH_PASS_MAX)
+            // command_graph_pass_names() ends with a trailing ", ", so "none"
+            // appends cleanly as the final accepted value
+            LOGGER_WARN("OMP_TASKGRAPH_OPT: unknown optimization pass '%s' (ignored). Available passes: %snone",
+                        tok, cgir::command_graph_pass_names());
+        else
+            passes |= cgir::command_graph_pass_bit(pass);
+    }
+    free(dup);
+
+    return passes;
+}
+
+/**
  *  Spec 6.0 says
  *  Modifications to the environment variables after the program has started,
  *  even if modified by the program itself, are ignored by the OpenMP
@@ -59,6 +102,10 @@ xkomp_env_init(xkomp_env_t * env)
     F(const char *, OMP_PLACES,         "cores");
     F(const char *, OMP_PROC_BIND,      "close");
     # undef F
+
+    // OMP_TASKGRAPH_OPT needs custom parsing (pass-name list -> bitset, and an
+    // empty value differs from unset), so it is handled outside the F() table.
+    env->OMP_TASKGRAPH_OPT = xkomp_env_init_parse_taskgraph_opt();
 
     // maybe display
     switch (env->OMP_DISPLAY_ENV)

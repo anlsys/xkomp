@@ -37,17 +37,9 @@ xkomp_taskgraph_begin(
             /* build a CG from a tdg */
             xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, &taskgraph.cg);
 
-            /* remove useless nodes */
-            //  # pragma omp taskgraph optimize(reduce_nodes)
-            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_REDUCE_NODE);
-
-            /* remove redundant edges */
-            //  # pragma omp taskgraph optimize(reduce_edges)
-            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_REDUCE_EDGE);
-
-            /* contract the CG */
-            //  # pragma omp taskgraph optimize(batch)
-            taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_BATCH);
+            /* optimize the CG with the passes selected by OMP_TASKGRAPH_OPT
+             * (defaults to reduce-node, reduce-edge, batch) */
+            taskgraph.cg.optimize(xkomp->env.OMP_TASKGRAPH_OPT);
         }
 
         /* replay the CG */
