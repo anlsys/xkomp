@@ -18,14 +18,12 @@ main(void)
     {
         # pragma omp single
         {
-            # pragma omp target device(DEVICE_ID) access() nowait
+            # pragma omp target nowait device(DEVICE_ID) access(read: x[0:N])
             {
                 printf("Running from device `%d` is initial: %d\n",
                         omp_get_device_num(), omp_is_initial_device());
                 assert(omp_is_initial_device() == 0);
             }
-
-            # pragma omp taskwait
         }
     }
     return 0;

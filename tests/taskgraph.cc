@@ -44,7 +44,7 @@ main(void)
 
             printf("Number of devices: %d\n", omp_get_num_devices());
             int iter;
-            for (iter = 0 ; iter < 5 ; ++iter)
+            for (iter = 0 ; iter < 20 ; ++iter)
             {
                 double t0 = omp_get_wtime();
                 constexpr xkomp_taskgraph_id_t graph_id = 0;
@@ -59,7 +59,7 @@ main(void)
                         {
                             # pragma omp target teams distribute parallel for device(omp_device_num) depend(inoutset: deps[omp_device_num]) nowait
                             for (int i = 0 ; i < size ; ++i)
-                                ; // x[i] = (2*i % 256);
+                                x[i] = (2*i % 256);
                         }
 
                         # pragma omp target update from(x[0:size]) device(omp_device_num) nowait depend(out: deps[omp_device_num])

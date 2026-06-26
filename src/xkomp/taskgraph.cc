@@ -45,6 +45,9 @@ xkomp_taskgraph_begin(
             //  # pragma omp taskgraph optimize(reduce_edges)
             taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_REDUCE_EDGE);
 
+            /* fuse kernels */
+            //taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_PROG_FUSE);
+
             /* contract the CG */
             //  # pragma omp taskgraph optimize(batch)
             taskgraph.cg.optimize(cgir::COMMAND_GRAPH_PASS_BATCH);
