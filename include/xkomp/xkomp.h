@@ -38,6 +38,10 @@ typedef struct  xkomp_env_t
     int OMP_THREAD_LIMIT;
     const char * OMP_PLACES;
     const char * OMP_PROC_BIND;
+
+    /* set of cgir command-graph optimization passes applied to recorded
+     * taskgraphs (see OMP_TASKGRAPH_OPT in env.cc) */
+    cgir::command_graph_pass_set_t OMP_TASKGRAPH_OPT;
 }               xkomp_env_t;
 
 /* a persistent team cached for `# pragma omp parallel`, reused across regions
