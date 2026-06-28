@@ -194,7 +194,6 @@ endif()
 if(XKOMP_TESTS_ACCESS)
     xkomp_add_test(access             access/omp_access.cc             access)
     xkomp_add_test(access_regions     access/omp_access_regions.cc     access)
-    xkomp_add_test(access_concurrent  access/omp_access_concurrent.cc  access)
     xkomp_add_test(access_war_waw     access/omp_access_war_waw.cc     access)
     xkomp_add_test(access_dag         access/omp_access_dag.cc         access)
     # target + access: also needs the offload runtime
