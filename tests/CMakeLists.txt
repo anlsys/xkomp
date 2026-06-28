@@ -39,6 +39,12 @@ find_package(XKRT  REQUIRED)
 option(XKOMP_TESTS_TARGET
        "Build tests that use 'omp target' (require the offload runtime)" ON)
 
+# The 'access' clause is an XKOMP extension that only the patched LLVM/clang can
+# parse (https://github.com/anlsys/llvm-project, iwomp26-access-clause).  Turn
+# this OFF when building the suite with a stock compiler.
+option(XKOMP_TESTS_ACCESS
+       "Build tests for the XKOMP 'access' clause (require the patched LLVM/clang)" ON)
+
 set(XKOMP_TEST_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}        # tests/common.h
     ${CMAKE_SOURCE_DIR}/include        # <xkomp/*.h>
@@ -180,4 +186,21 @@ if(XKOMP_TESTS_TARGET)
     xkomp_add_test(target_update      target/omp_target_update.cc            target)
     xkomp_add_test(target_data        target/omp_target_data.cc              target)
     xkomp_add_test(taskgraph_axpy     taskgraph/omp_taskgraph_axpy.cc        target)
+endif()
+
+##############################################################################
+# access clause (XKOMP extension) -- needs the patched LLVM/clang             #
+##############################################################################
+if(XKOMP_TESTS_ACCESS)
+    xkomp_add_test(access             access/omp_access.cc             access)
+    xkomp_add_test(access_regions     access/omp_access_regions.cc     access)
+    xkomp_add_test(access_concurrent  access/omp_access_concurrent.cc  access)
+    xkomp_add_test(access_war_waw     access/omp_access_war_waw.cc     access)
+    xkomp_add_test(access_dag         access/omp_access_dag.cc         access)
+    # target + access: also needs the offload runtime
+    if(XKOMP_TESTS_TARGET)
+        xkomp_add_test(access_target          access/omp_access_target.cc          access)
+        xkomp_add_test(access_target_overlap  access/omp_access_target_overlap.cc  access)
+        xkomp_add_test(access_stencil_target  access/omp_access_stencil_target.cc  access)
+    endif()
 endif()
