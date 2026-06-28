@@ -15,7 +15,10 @@ project(tests CXX)
 #
 # Each test documents its status at the top of the file:
 #   // xkomp: supported          -> expected to PASS
-#   // xkomp: XFAIL <reason>      -> construct not implemented yet (see below)
+#   // xkomp: XFAIL <reason>      -> construct not supported yet; registered with
+#                                    xkomp_add_xfail_test() so it shows up as
+#                                    FAILED in `make test` (gap tracking) until
+#                                    the construct is implemented.
 #
 # All tests are compiled with -fopenmp (otherwise clang silently drops every
 # `#pragma omp`) and linked against the in-tree xkomp library so the
@@ -84,9 +87,11 @@ function(xkomp_add_test name src label)
     set_tests_properties(${name} PROPERTIES LABELS "${label}")
 endfunction()
 
-# Expected-to-FAIL test (construct not implemented yet).  Built on demand and
-# driven through run_xfail.cmake; marked WILL_FAIL so it is green while the
-# construct is missing and turns red once it works (-> promote it).
+# Test for a construct XKOMP does not support yet.  Built on demand (so a link
+# failure does not break `make`) and driven through run_xfail.cmake, which runs
+# the test as a normal FAILURE when the construct cannot be compiled/linked or
+# aborts at run time.  It therefore shows up as "Failed" in `make test` -- so the
+# gap is tracked -- and turns "Passed" once the construct is implemented.
 function(xkomp_add_xfail_test name src label)
     add_executable(${name} EXCLUDE_FROM_ALL ${src})
     _xkomp_test_setup(${name})
@@ -96,7 +101,7 @@ function(xkomp_add_xfail_test name src label)
             -DBIN_DIR=${CMAKE_BINARY_DIR}
             -DEXE=$<TARGET_FILE:${name}>
             -P ${CMAKE_SOURCE_DIR}/cmake/run_xfail.cmake)
-    set_tests_properties(${name} PROPERTIES WILL_FAIL TRUE LABELS "xfail;${label}")
+    set_tests_properties(${name} PROPERTIES LABELS "unsupported;${label}")
 endfunction()
 
 ##############################################################################
