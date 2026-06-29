@@ -6,12 +6,20 @@ project(tests CXX)
 #
 # XKOMP test-suite
 # ----------------
-# Organised by construct, mirroring the LLVM OpenMP runtime test layout:
+# Two top-level families, each then organised by construct:
 #
-#   parallel/            worksharing/for/      worksharing/sections/
-#   worksharing/single/  master/   masked/     barrier/   atomic/   critical/
-#   tasking/             taskgraph/            target/     teams/
-#   composite/           (several constructs combined)
+#   directive/   standard C/C++ OpenMP, written with `#pragma omp ...` only
+#                (parallel, worksharing/{for,sections,single}, master, masked,
+#                 barrier, atomic, critical, tasking, teams, composite, target,
+#                 access)
+#   xkomp++/     tests of the xkomp++.h C++ interfaces (e.g.
+#                pragma_omp_taskgraph(gid, flags, [&]{ ... }))
+#
+# The source-tree hierarchy is mirrored in the build tree: a test at
+#   tests/<family>/<construct>/<name>.cc
+# is built to
+#   <build>/tests/<family>/<construct>/<name>
+# (so two tests may share a short name without colliding).
 #
 # Each test documents its status at the top of the file:
 #   // xkomp: supported          -> expected to PASS
@@ -68,7 +76,7 @@ function(_xkomp_test_setup tgt)
         add_dependencies(${tgt} compat_links)
     endif()
     target_link_libraries(${tgt} PRIVATE ${XKOMP} ${HWLOC_LIBRARIES} m)
-    # The taskgraph tests include <xkrt/*.h>; link the imported target so its
+    # The xkomp++ tests include <xkrt/*.h>; link the imported target so its
     # include directories propagate (xkomp links XKRT privately, so it does not
     # carry them transitively).  Fall back to the plain variables otherwise.
     if(TARGET XKRT::xkrt)
@@ -79,12 +87,30 @@ function(_xkomp_test_setup tgt)
     endif()
 endfunction()
 
-# Expected-to-PASS test.  usage: xkomp_add_test(<name> <source> <label>)
-function(xkomp_add_test name src label)
-    add_executable(${name} ${src})
-    _xkomp_test_setup(${name})
-    add_test(NAME ${name} COMMAND ${name})
-    set_tests_properties(${name} PROPERTIES LABELS "${label}")
+# Derive, from a source path "<dir>/<base>.cc", a unique CMake target name, the
+# mirrored output directory and the (hierarchical) CTest name.
+macro(_xkomp_test_paths src)
+    get_filename_component(_xk_dir  "${src}" DIRECTORY)   # e.g. directive/parallel
+    get_filename_component(_xk_base "${src}" NAME_WE)     # e.g. omp_parallel
+    set(_xk_test "${_xk_dir}/${_xk_base}")                # CTest name
+    string(REGEX REPLACE "[^A-Za-z0-9]" "_" _xk_tgt "${_xk_test}")  # CMake target
+endmacro()
+
+# place the built executable under <build>/tests/<dir>/ with name <base>
+function(_xkomp_test_output tgt dir base)
+    set_target_properties(${tgt} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/${dir}"
+        OUTPUT_NAME "${base}")
+endfunction()
+
+# Expected-to-PASS test.  usage: xkomp_add_test(<source> <label>)
+function(xkomp_add_test src label)
+    _xkomp_test_paths("${src}")
+    add_executable(${_xk_tgt} ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label}")
 endfunction()
 
 # Test for a construct XKOMP does not support yet.  Built on demand (so a link
@@ -92,119 +118,112 @@ endfunction()
 # the test as a normal FAILURE when the construct cannot be compiled/linked or
 # aborts at run time.  It therefore shows up as "Failed" in `make test` -- so the
 # gap is tracked -- and turns "Passed" once the construct is implemented.
-function(xkomp_add_xfail_test name src label)
-    add_executable(${name} EXCLUDE_FROM_ALL ${src})
-    _xkomp_test_setup(${name})
-    add_test(NAME ${name}
+function(xkomp_add_xfail_test src label)
+    _xkomp_test_paths("${src}")
+    add_executable(${_xk_tgt} EXCLUDE_FROM_ALL ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}"
         COMMAND ${CMAKE_COMMAND}
-            -DTARGET=${name}
+            -DTARGET=${_xk_tgt}
             -DBIN_DIR=${CMAKE_BINARY_DIR}
-            -DEXE=$<TARGET_FILE:${name}>
+            -DEXE=$<TARGET_FILE:${_xk_tgt}>
             -P ${CMAKE_SOURCE_DIR}/cmake/run_xfail.cmake)
-    set_tests_properties(${name} PROPERTIES LABELS "unsupported;${label}")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "unsupported;${label}")
 endfunction()
 
 ##############################################################################
-# parallel                                                                    #
+# directive/ : standard C/C++ OpenMP (#pragma omp ...)                         #
 ##############################################################################
-xkomp_add_test(parallel               parallel/omp_parallel.cc               parallel)
-xkomp_add_test(parallel_num_threads   parallel/omp_parallel_num_threads.cc   parallel)
-xkomp_add_test(parallel_firstprivate  parallel/omp_parallel_firstprivate.cc  parallel)
-xkomp_add_test(parallel_nested        parallel/omp_parallel_nested.cc        parallel)
-xkomp_add_xfail_test(parallel_reduction parallel/omp_parallel_reduction.cc   parallel)
-xkomp_add_xfail_test(parallel_if      parallel/omp_parallel_if.cc            parallel)
 
-##############################################################################
-# worksharing : for / sections / single                                       #
-##############################################################################
-xkomp_add_test(for                    worksharing/for/omp_for.cc                 worksharing)
-xkomp_add_test(for_lastprivate        worksharing/for/omp_for_lastprivate.cc     worksharing)
-xkomp_add_test(for_nowait             worksharing/for/omp_for_nowait.cc          worksharing)
-xkomp_add_test(for_unsigned           worksharing/for/omp_for_unsigned.cc        worksharing)
-xkomp_add_test(for_increments         worksharing/for/omp_for_increments.cc      worksharing)
-xkomp_add_test(parallel_for           worksharing/for/omp_parallel_for.cc        worksharing)
-xkomp_add_xfail_test(for_schedule_dynamic worksharing/for/omp_for_schedule_dynamic.cc worksharing)
-xkomp_add_xfail_test(for_static_chunk worksharing/for/omp_for_static_chunk.cc    worksharing)
-xkomp_add_xfail_test(for_collapse     worksharing/for/omp_for_collapse.cc        worksharing)
-xkomp_add_xfail_test(for_int64        worksharing/for/omp_for_int64.cc           worksharing)
-xkomp_add_xfail_test(for_reduction    worksharing/for/omp_for_reduction.cc       worksharing)
+# --- parallel ---------------------------------------------------------------
+xkomp_add_test(directive/parallel/omp_parallel.cc               parallel)
+xkomp_add_test(directive/parallel/omp_parallel_num_threads.cc   parallel)
+xkomp_add_test(directive/parallel/omp_parallel_firstprivate.cc  parallel)
+xkomp_add_test(directive/parallel/omp_parallel_nested.cc        parallel)
+xkomp_add_xfail_test(directive/parallel/omp_parallel_reduction.cc parallel)
+xkomp_add_xfail_test(directive/parallel/omp_parallel_if.cc        parallel)
 
-xkomp_add_xfail_test(sections         worksharing/sections/omp_sections.cc       worksharing)
+# --- worksharing : for / sections / single ----------------------------------
+xkomp_add_test(directive/worksharing/for/omp_for.cc                 worksharing)
+xkomp_add_test(directive/worksharing/for/omp_for_lastprivate.cc     worksharing)
+xkomp_add_test(directive/worksharing/for/omp_for_nowait.cc          worksharing)
+xkomp_add_test(directive/worksharing/for/omp_for_unsigned.cc        worksharing)
+xkomp_add_test(directive/worksharing/for/omp_for_increments.cc      worksharing)
+xkomp_add_test(directive/worksharing/for/omp_parallel_for.cc        worksharing)
+xkomp_add_xfail_test(directive/worksharing/for/omp_for_schedule_dynamic.cc worksharing)
+xkomp_add_xfail_test(directive/worksharing/for/omp_for_static_chunk.cc      worksharing)
+xkomp_add_xfail_test(directive/worksharing/for/omp_for_collapse.cc          worksharing)
+xkomp_add_xfail_test(directive/worksharing/for/omp_for_int64.cc             worksharing)
+xkomp_add_xfail_test(directive/worksharing/for/omp_for_reduction.cc         worksharing)
 
-xkomp_add_test(single                 worksharing/single/omp_single.cc           worksharing)
-xkomp_add_test(single_nowait          worksharing/single/omp_single_nowait.cc    worksharing)
-xkomp_add_xfail_test(single_copyprivate worksharing/single/omp_single_copyprivate.cc worksharing)
+xkomp_add_xfail_test(directive/worksharing/sections/omp_sections.cc         worksharing)
 
-##############################################################################
-# master / masked                                                             #
-##############################################################################
-xkomp_add_test(master                 master/omp_master.cc                   master)
-xkomp_add_xfail_test(masked           masked/omp_masked.cc                   masked)
+xkomp_add_test(directive/worksharing/single/omp_single.cc           worksharing)
+xkomp_add_test(directive/worksharing/single/omp_single_nowait.cc    worksharing)
+xkomp_add_xfail_test(directive/worksharing/single/omp_single_copyprivate.cc worksharing)
 
-##############################################################################
-# barrier / atomic / critical                                                 #
-##############################################################################
-xkomp_add_test(barrier                barrier/omp_barrier.cc                 barrier)
-xkomp_add_test(atomic                 atomic/omp_atomic.cc                   atomic)
-xkomp_add_xfail_test(critical         critical/omp_critical.cc               critical)
+# --- master / masked --------------------------------------------------------
+xkomp_add_test(directive/master/omp_master.cc                   master)
+xkomp_add_xfail_test(directive/masked/omp_masked.cc             masked)
 
-##############################################################################
-# tasking                                                                     #
-##############################################################################
-xkomp_add_test(task                   tasking/omp_task.cc                    tasking)
-xkomp_add_test(taskwait               tasking/omp_taskwait.cc                tasking)
-xkomp_add_test(task_depend            tasking/omp_task_depend.cc             tasking)
-xkomp_add_test(task_depend_inoutset   tasking/omp_task_depend_inoutset.cc    tasking)
-xkomp_add_test(task_depend_mutexinoutset tasking/omp_task_depend_mutexinoutset.cc tasking)
-xkomp_add_test(task_dag               tasking/omp_task_dag.cc                tasking)
-xkomp_add_test(task_nested            tasking/omp_task_nested.cc             tasking)
-xkomp_add_test(parallel_tasks         tasking/omp_parallel_tasks.cc          tasking)
-xkomp_add_test(task_untied            tasking/omp_task_untied.cc             tasking)
-xkomp_add_xfail_test(taskyield        tasking/omp_taskyield.cc               tasking)
-xkomp_add_xfail_test(taskgroup        tasking/omp_taskgroup.cc               tasking)
-xkomp_add_xfail_test(task_if          tasking/omp_task_if.cc                 tasking)
+# --- barrier / atomic / critical --------------------------------------------
+xkomp_add_test(directive/barrier/omp_barrier.cc                 barrier)
+xkomp_add_test(directive/atomic/omp_atomic.cc                   atomic)
+xkomp_add_xfail_test(directive/critical/omp_critical.cc         critical)
 
-##############################################################################
-# taskgraph (XKOMP extension)                                                 #
-##############################################################################
-xkomp_add_test(taskgraph              taskgraph/omp_taskgraph.cc             taskgraph)
-xkomp_add_test(taskgraph_deps         taskgraph/omp_taskgraph_deps.cc        taskgraph)
+# --- tasking ----------------------------------------------------------------
+xkomp_add_test(directive/tasking/omp_task.cc                    tasking)
+xkomp_add_test(directive/tasking/omp_taskwait.cc               tasking)
+xkomp_add_test(directive/tasking/omp_task_depend.cc            tasking)
+xkomp_add_test(directive/tasking/omp_task_depend_inoutset.cc   tasking)
+xkomp_add_test(directive/tasking/omp_task_depend_mutexinoutset.cc tasking)
+xkomp_add_test(directive/tasking/omp_task_dag.cc               tasking)
+xkomp_add_test(directive/tasking/omp_task_nested.cc            tasking)
+xkomp_add_test(directive/tasking/omp_parallel_tasks.cc         tasking)
+xkomp_add_test(directive/tasking/omp_task_untied.cc            tasking)
+xkomp_add_xfail_test(directive/tasking/omp_taskyield.cc        tasking)
+xkomp_add_xfail_test(directive/tasking/omp_taskgroup.cc        tasking)
+xkomp_add_xfail_test(directive/tasking/omp_task_if.cc          tasking)
 
-##############################################################################
-# teams (host) -- not implemented                                             #
-##############################################################################
-xkomp_add_xfail_test(teams            teams/omp_teams.cc                     teams)
+# --- teams (host) -- not implemented ----------------------------------------
+xkomp_add_xfail_test(directive/teams/omp_teams.cc              teams)
 
-##############################################################################
-# composite : several constructs combined into compliant patterns             #
-##############################################################################
-xkomp_add_test(nested_worksharing     composite/omp_nested_worksharing.cc    composite)
-xkomp_add_test(manual_reduction       composite/omp_manual_reduction.cc      composite)
-xkomp_add_test(producer_consumer      composite/omp_producer_consumer.cc     composite)
-xkomp_add_test(parallel_matvec        composite/omp_parallel_matvec.cc       composite)
+# --- composite : several constructs combined --------------------------------
+xkomp_add_test(directive/composite/omp_nested_worksharing.cc   composite)
+xkomp_add_test(directive/composite/omp_manual_reduction.cc     composite)
+xkomp_add_test(directive/composite/omp_producer_consumer.cc    composite)
+xkomp_add_test(directive/composite/omp_parallel_matvec.cc      composite)
 
-##############################################################################
-# target -- need the offload runtime, hence guarded by an option              #
-##############################################################################
+# --- target -- needs the offload runtime, hence guarded ---------------------
 if(XKOMP_TESTS_TARGET)
-    xkomp_add_test(target_map         target/omp_target_map.cc               target)
-    xkomp_add_test(target_update      target/omp_target_update.cc            target)
-    xkomp_add_test(target_data        target/omp_target_data.cc              target)
-    xkomp_add_test(taskgraph_axpy     taskgraph/omp_taskgraph_axpy.cc        target)
+    xkomp_add_test(directive/target/omp_target_map.cc          target)
+    xkomp_add_test(directive/target/omp_target_update.cc       target)
+    xkomp_add_test(directive/target/omp_target_data.cc         target)
+endif()
+
+# --- access clause (XKOMP extension) -- needs the patched LLVM/clang ---------
+if(XKOMP_TESTS_ACCESS)
+    xkomp_add_test(directive/access/omp_access.cc              access)
+    xkomp_add_test(directive/access/omp_access_regions.cc      access)
+    xkomp_add_test(directive/access/omp_access_concurrent.cc   access)
+    xkomp_add_test(directive/access/omp_access_war_waw.cc      access)
+    xkomp_add_test(directive/access/omp_access_dag.cc          access)
+    # target + access: also needs the offload runtime
+    if(XKOMP_TESTS_TARGET)
+        xkomp_add_test(directive/access/omp_access_target.cc          access)
+        xkomp_add_test(directive/access/omp_access_target_overlap.cc  access)
+        xkomp_add_test(directive/access/omp_access_stencil_target.cc  access)
+    endif()
 endif()
 
 ##############################################################################
-# access clause (XKOMP extension) -- needs the patched LLVM/clang             #
+# xkomp++/ : tests of the xkomp++.h C++ interfaces                            #
 ##############################################################################
-if(XKOMP_TESTS_ACCESS)
-    xkomp_add_test(access             access/omp_access.cc             access)
-    xkomp_add_test(access_regions     access/omp_access_regions.cc     access)
-    xkomp_add_test(access_war_waw     access/omp_access_war_waw.cc     access)
-    xkomp_add_test(access_dag         access/omp_access_dag.cc         access)
-    # target + access: also needs the offload runtime
-    if(XKOMP_TESTS_TARGET)
-        xkomp_add_test(access_target          access/omp_access_target.cc          access)
-        xkomp_add_test(access_target_overlap  access/omp_access_target_overlap.cc  access)
-        xkomp_add_test(access_stencil_target  access/omp_access_stencil_target.cc  access)
-    endif()
+
+# --- taskgraph (pragma_omp_taskgraph) ---------------------------------------
+xkomp_add_test(xkomp++/taskgraph/omp_taskgraph.cc             taskgraph)
+xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_deps.cc        taskgraph)
+if(XKOMP_TESTS_TARGET)
+    xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpy.cc    taskgraph)
 endif()
