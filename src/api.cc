@@ -15,7 +15,7 @@ xkomp_get(void)
         xkomp = (xkomp_t *) malloc(sizeof(xkomp_t));
         assert(xkomp);
         new (&xkomp->formats.kmp.per_loc) std::unordered_map<void *, task_format_id_t>();
-        new (&xkomp->formats.kmp.per_loc_lock) std::mutex();
+        xkomp->formats.kmp.per_loc_lock = SPINLOCK_INITIALIZER;
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
@@ -133,7 +133,6 @@ __xkomp_teardown(void)
     xkomp->runtime.deinit();
     xkomp->taskgraphs.~map();
     xkomp->formats.kmp.per_loc.~unordered_map();
-    xkomp->formats.kmp.per_loc_lock.~mutex();
     free(xkomp);
     xkomp = NULL;
 }

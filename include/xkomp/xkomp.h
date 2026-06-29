@@ -3,11 +3,11 @@
 
 # include <xkrt/runtime.h>
 # include <xkrt/data-structures/small-vector.h>
+# include <xkrt/sync/spinlock.h>
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
 
 # include <map>
-# include <mutex>
 # include <unordered_map>
 
 /**
@@ -76,12 +76,11 @@ typedef struct  xkomp_t
             task_format_id_t host;
             task_format_id_t target_memcpy_async;
 
-            /* one task format per source location (ident_t * loc_ref), so that
-             * the LLVM-IR passed by the compiler for that construct can be
-             * attached to it. Keyed by the loc_ref pointer (stored as void *
-             * to avoid a hard dependency on ident_t here). */
+            /* one task format per source location (ident_t * loc_ref), keyed by
+             * the loc_ref pointer (as void *), carrying its compiler-provided
+             * LLVM-IR */
             std::unordered_map<void *, task_format_id_t> per_loc;
-            std::mutex per_loc_lock;
+            spinlock_t per_loc_lock;
         } kmp;
     } formats;
 

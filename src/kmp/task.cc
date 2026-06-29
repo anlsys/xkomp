@@ -164,11 +164,9 @@ body_omp_task_target(
     body_omp_task_run(task, gtid);
 }
 
-// Get (or lazily create) the task format associated with a source location.
-// Each source location (ident_t * loc_ref) gets its own task format so that the
-// compiler-provided LLVM-IR of that construct can be attached to it (on the host
-// function's source). The format's per-target functions are copied from the
-// shared 'omp-task' template.
+// Get (or lazily create) the task format for a source location (ident_t *
+// loc_ref), copying the per-target functions from the shared 'omp-task'
+// template and attaching the construct's LLVM-IR.
 static inline task_format_id_t
 get_or_create_loc_format(
     xkomp_t * xkomp,
@@ -182,40 +180,44 @@ get_or_create_loc_format(
 
     void * key = (void *) loc_ref;
 
-    std::lock_guard<std::mutex> guard(xkomp->formats.kmp.per_loc_lock);
+    SPINLOCK_LOCK(xkomp->formats.kmp.per_loc_lock);
 
-    // already created for that location ?
+    task_format_id_t fmtid;
     auto it = xkomp->formats.kmp.per_loc.find(key);
     if (it != xkomp->formats.kmp.per_loc.end())
-        return it->second;
-
-    // build a new format from the template's per-target functions
-    task_format_t format;
-    memset(&format, 0, sizeof(task_format_t));
-
-    task_format_t * tmpl = xkomp->runtime.task_format_get(xkomp->formats.kmp.host);
-    memcpy(format.f, tmpl->f, sizeof(format.f));
-    format.suggest = tmpl->suggest;
-
-    // label from the source location string ("file;func;line;line")
-    if (loc_ref->psource)
-        snprintf(format.label, sizeof(format.label), "%s", loc_ref->psource);
-    else
-        snprintf(format.label, sizeof(format.label), "omp-task");
-
-    // attach the LLVM-IR (if provided) to the host function's source. The IR is
-    // a compile-time global owned by the program image, so `_owned` is false.
-    if (ir != NULL && ir_size > 0)
     {
-        cgir_command_prog_source_t * src = &format.source[XKRT_TASK_FORMAT_TARGET_HOST];
-        src->type                  = CGIR_COMMAND_PROG_SOURCE_TYPE_LLVMIR;
-        src->content.llvmir.raw    = ir;
-        src->content.llvmir.size   = ir_size;
-        src->content.llvmir._owned = false;
+        fmtid = it->second;
+    }
+    else
+    {
+        task_format_t format;
+        memset(&format, 0, sizeof(task_format_t));
+
+        task_format_t * tmpl = xkomp->runtime.task_format_get(xkomp->formats.kmp.host);
+        memcpy(format.f, tmpl->f, sizeof(format.f));
+        format.suggest = tmpl->suggest;
+
+        // label from the source location string ("file;func;line;line")
+        if (loc_ref->psource)
+            snprintf(format.label, sizeof(format.label), "%s", loc_ref->psource);
+        else
+            snprintf(format.label, sizeof(format.label), "omp-task");
+
+        // the IR is a compile-time global, so `_owned` is false
+        if (ir != NULL && ir_size > 0)
+        {
+            cgir_command_prog_source_t * src = &format.source[XKRT_TASK_FORMAT_TARGET_HOST];
+            src->type                  = CGIR_COMMAND_PROG_SOURCE_TYPE_LLVMIR;
+            src->content.llvmir.raw    = ir;
+            src->content.llvmir.size   = ir_size;
+            src->content.llvmir._owned = false;
+        }
+
+        fmtid = xkomp->runtime.task_format_create(&format);
+        xkomp->formats.kmp.per_loc[key] = fmtid;
     }
 
-    const task_format_id_t fmtid = xkomp->runtime.task_format_create(&format);
-    xkomp->formats.kmp.per_loc[key] = fmtid;
+    SPINLOCK_UNLOCK(xkomp->formats.kmp.per_loc_lock);
     return fmtid;
 }
 
