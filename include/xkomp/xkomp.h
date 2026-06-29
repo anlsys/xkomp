@@ -6,6 +6,10 @@
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
 
+# include <map>
+# include <mutex>
+# include <unordered_map>
+
 /**
  * EXPORT_OMP_ABI(suffix)
  *
@@ -67,8 +71,17 @@ typedef struct  xkomp_t
     /* omp task format */
     struct {
         struct {
+            /* template format ('omp-task') whose per-target function pointers
+             * are copied into every per-source-location format */
             task_format_id_t host;
             task_format_id_t target_memcpy_async;
+
+            /* one task format per source location (ident_t * loc_ref), so that
+             * the LLVM-IR passed by the compiler for that construct can be
+             * attached to it. Keyed by the loc_ref pointer (stored as void *
+             * to avoid a hard dependency on ident_t here). */
+            std::unordered_map<void *, task_format_id_t> per_loc;
+            std::mutex per_loc_lock;
         } kmp;
     } formats;
 

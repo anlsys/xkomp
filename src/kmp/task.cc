@@ -133,6 +133,61 @@ body_omp_task_target(
     body_omp_task_run(task, gtid);
 }
 
+// Get (or lazily create) the task format associated with a source location.
+// Each source location (ident_t * loc_ref) gets its own task format so that the
+// compiler-provided LLVM-IR of that construct can be attached to it (on the host
+// function's source). The format's per-target functions are copied from the
+// shared 'omp-task' template.
+static inline task_format_id_t
+get_or_create_loc_format(
+    xkomp_t * xkomp,
+    ident_t * loc_ref,
+    void * ir,
+    size_t ir_size
+) {
+    // no source location: fall back to the shared template format
+    if (loc_ref == NULL)
+        return xkomp->formats.kmp.host;
+
+    void * key = (void *) loc_ref;
+
+    std::lock_guard<std::mutex> guard(xkomp->formats.kmp.per_loc_lock);
+
+    // already created for that location ?
+    auto it = xkomp->formats.kmp.per_loc.find(key);
+    if (it != xkomp->formats.kmp.per_loc.end())
+        return it->second;
+
+    // build a new format from the template's per-target functions
+    task_format_t format;
+    memset(&format, 0, sizeof(task_format_t));
+
+    task_format_t * tmpl = xkomp->runtime.task_format_get(xkomp->formats.kmp.host);
+    memcpy(format.f, tmpl->f, sizeof(format.f));
+    format.suggest = tmpl->suggest;
+
+    // label from the source location string ("file;func;line;line")
+    if (loc_ref->psource)
+        snprintf(format.label, sizeof(format.label), "%s", loc_ref->psource);
+    else
+        snprintf(format.label, sizeof(format.label), "omp-task");
+
+    // attach the LLVM-IR (if provided) to the host function's source. The IR is
+    // a compile-time global owned by the program image, so `_owned` is false.
+    if (ir != NULL && ir_size > 0)
+    {
+        cgir_command_prog_source_t * src = &format.source[XKRT_TASK_FORMAT_TARGET_HOST];
+        src->type                  = CGIR_COMMAND_PROG_SOURCE_TYPE_LLVMIR;
+        src->content.llvmir.raw    = ir;
+        src->content.llvmir.size   = ir_size;
+        src->content.llvmir._owned = false;
+    }
+
+    const task_format_id_t fmtid = xkomp->runtime.task_format_create(&format);
+    xkomp->formats.kmp.per_loc[key] = fmtid;
+    return fmtid;
+}
+
 inline static kmp_task *
 task_alloc(
     ident_t * loc_ref,
@@ -143,7 +198,9 @@ task_alloc(
     kmp_routine_entry_t task_entry,
     kmp_int32 ndeps,
     kmp_int32 nacs,
-    kmp_int32 device_id
+    kmp_int32 device_id,
+    void * ir,
+    size_t ir_size
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -178,9 +235,12 @@ task_alloc(
     // if recording flag is set on parent, record that task.
     // TODO: if the `replayable(false)` is set, do not record
 
+    // resolve the per-source-location task format (carries the LLVM-IR)
+    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size);
+
     // see llvm impl
     const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
-    task_t * task = xkomp->runtime.task_new(xkomp->formats.kmp.host, xkflags, NULL, args_size, naccesses);
+    task_t * task = xkomp->runtime.task_new(fmtid, xkflags, NULL, args_size, naccesses);
     assert(task);
 
     // init acs infos
@@ -237,10 +297,12 @@ __kmpc_omp_task_alloc_with_deps(
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry,
     kmp_int32 ndeps,
-    kmp_int32 nacs
+    kmp_int32 nacs,
+    void * ir,
+    size_t ir_size
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size);
 }
 
 extern "C"
@@ -254,14 +316,16 @@ __kmpc_omp_target_task_alloc_with_deps(
     kmp_routine_entry_t task_entry,
     kmp_int64 device_id,
     kmp_int32 ndeps,
-    kmp_int32 nacs
+    kmp_int32 nacs,
+    void * ir,
+    size_t ir_size
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size);
 }
 
 extern "C"
@@ -278,7 +342,7 @@ __kmpc_omp_target_task_alloc(
     LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
     constexpr kmp_int32 ndeps = 0;
     constexpr kmp_int32 nacs  = 0;
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, NULL, 0);
 }
 
 extern "C"
@@ -295,7 +359,7 @@ __kmpc_omp_task_alloc(
     constexpr kmp_int32 ndeps = 0;
     constexpr kmp_int32 nacs  = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, NULL, 0);
 }
 
 extern "C"
