@@ -82,6 +82,15 @@ xkomp_env_init_parse_taskgraph_opt(void)
     }
     free(dup);
 
+    // prog-fuse only fuses LLVM-IR; the jit pass must follow it to compile the
+    // fused program. Without jit, the fused launcher stays NULL and aborts at
+    // run-time.
+    if ((passes & cgir::COMMAND_GRAPH_PASS_PROG_FUSE_BIT) &&
+       !(passes & cgir::COMMAND_GRAPH_PASS_JIT_BIT))
+        LOGGER_WARN("OMP_TASKGRAPH_OPT: 'prog-fuse' is enabled without 'jit'; "
+                    "fused programs will not be compiled and will abort at "
+                    "run-time. Add 'jit' to OMP_TASKGRAPH_OPT.");
+
     return passes;
 }
 
