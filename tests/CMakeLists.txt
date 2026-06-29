@@ -189,6 +189,10 @@ xkomp_add_xfail_test(directive/tasking/omp_task_if.cc          tasking)
 # --- teams (host) -- not implemented ----------------------------------------
 xkomp_add_xfail_test(directive/teams/omp_teams.cc              teams)
 
+# --- taskgraph (directive form) -- `#pragma omp taskgraph` not in the compiler
+#     yet (the xkomp++/ tests cover the same feature via pragma_omp_taskgraph)
+xkomp_add_xfail_test(directive/taskgraph/omp_taskgraph.cc      taskgraph)
+
 # --- composite : several constructs combined --------------------------------
 xkomp_add_test(directive/composite/omp_nested_worksharing.cc   composite)
 xkomp_add_test(directive/composite/omp_manual_reduction.cc     composite)
@@ -226,4 +230,5 @@ xkomp_add_test(xkomp++/taskgraph/omp_taskgraph.cc             taskgraph)
 xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_deps.cc        taskgraph)
 if(XKOMP_TESTS_TARGET)
     xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpy.cc    taskgraph)
+    xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpby.cc   taskgraph)
 endif()
