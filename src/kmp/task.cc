@@ -10,6 +10,22 @@ typedef struct  task_args_t
     // followed by the kmp task
 }               task_args_t;
 
+/*
+ * Number of access slots reserved for a task allocated through the stock-LLVM
+ * ABI (__kmpc_omp_task_alloc / __kmpc_omp_target_task_alloc).
+ *
+ * The patched LLVM passes the dependence/access count at allocation time
+ * (__kmpc_omp_task_alloc_with_deps), so XKOMP sizes the task exactly.  Stock
+ * LLVM does not: it allocates first and only reveals the dependences later in
+ * __kmpc_omp_task_with_deps.  An XKRT task stores its accesses inline *before*
+ * the kmp_task_t region, so the kmp_task_t offset depends on the access count,
+ * which must therefore be fixed at allocation time.  For the stock ABI we hence
+ * reserve a FIXED number of slots and pad the unused ones with inert accesses
+ * (keeping the kmp_task_t at a fixed offset); a task needing more dependences
+ * than this is rejected.
+ */
+# define XKOMP_FIXED_ACCESSES   4
+
 // see llvm impl
 const size_t
 round_up_to_val(size_t size, size_t val)
@@ -47,6 +63,21 @@ task_from_ktask(kmp_task_t * ktask)
     // assert(TASK_ARGS(args->task) == (void *) args);
 
     return args->task;
+}
+
+/*
+ * Pre-fill access slots [from, to) with inert "virtual" (ACCESS_MODE_V) accesses.
+ * They carry no data movement and have no successors, so every runtime loop that
+ * iterates over the task's reserved slots (data fetch, dependence release,
+ * taskgraph walk) skips/ignores them.  This keeps acs->ac (and hence the
+ * kmp_task_t offset used by ktask_from_task) fixed, while real dependences (if
+ * any) overwrite the leading slots in __kmpc_omp_task_with_deps_v2.
+ */
+static inline void
+task_pad_accesses(task_t * task, access_t * accesses, kmp_int32 from, kmp_int32 to)
+{
+    for (kmp_int32 i = from ; i < to ; ++i)
+        new (accesses + i) access_t(task, ACCESS_MODE_V, ACCESS_CONCURRENCY_SEQUENTIAL, ACCESS_SCOPE_NONUNIFIED);
 }
 
 // Launch the routine associated with an openmp task
@@ -328,6 +359,10 @@ __kmpc_omp_target_task_alloc_with_deps(
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size);
 }
 
+// Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
+// FIXED number of access slots and pad them with inert accesses, keeping the
+// kmp_task_t at a fixed offset.  Real dependences (if any, up to
+// XKOMP_FIXED_ACCESSES) overwrite the leading slots in __kmpc_omp_task_with_deps.
 extern "C"
 kmp_task_t *
 __kmpc_omp_target_task_alloc(
@@ -339,12 +374,21 @@ __kmpc_omp_target_task_alloc(
     kmp_routine_entry_t task_entry,
     kmp_int64 device_id
 ) {
-    LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
-    constexpr kmp_int32 ndeps = 0;
+    LOGGER_WARN("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
+                "are supported; use the patched LLVM/clang for XKOMP for unlimited "
+                "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
+    flags.tiedness = TASK_UNTIED;   // target tasks are untied per the spec
+    constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, NULL, 0);
+    constexpr void * ir = NULL;
+    constexpr size_t ir_size = 0;
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size);
+    task_t * task = task_from_ktask(ktask);
+    task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
+    return ktask;
 }
 
+// Stock-LLVM ABI entry point: see __kmpc_omp_target_task_alloc above.
 extern "C"
 kmp_task_t *
 __kmpc_omp_task_alloc(
@@ -355,11 +399,18 @@ __kmpc_omp_task_alloc(
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry
 ) {
-    LOGGER_WARN("You are most likely not using the patched version of LLVM/clang for XKOMP, execution may fail.");
-    constexpr kmp_int32 ndeps = 0;
+    LOGGER_WARN("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
+                "are supported; use the patched LLVM/clang for XKOMP for unlimited "
+                "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
+    constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
+    constexpr void * ir = NULL;
+    constexpr size_t ir_size = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, NULL, 0);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size);
+    task_t * task = task_from_ktask(ktask);
+    task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
+    return ktask;
 }
 
 extern "C"
@@ -387,6 +438,9 @@ __kmpc_omp_task(
         body_omp_task(NULL, NULL, task);
         return 1;
     }
+
+    // stock-LLVM no-dep task: its reserved access slots were already padded with
+    // inert accesses at allocation time, so it can be committed as-is.
     xkomp->runtime.task_commit(task);
 
     return 0;
@@ -518,20 +572,40 @@ __kmpc_omp_task_with_deps_v2(
     xkomp_t * xkomp = xkomp_get();
     assert(xkomp);
 
-    assert(ndeps <= XKRT_TASK_MAX_ACCESSES);
+    // total accesses = access-clause (XKOMP ext) + aliased deps + non-aliased deps.
+    // Stock LLVM splits dependences into an aliasing and a non-aliasing list;
+    // both must be honoured (XKOMP previously ignored the non-aliasing one).
+    const kmp_int32 naccesses = nacs + ndeps + ndeps_noalias;
+
     task_t * task = task_from_ktask(ktask);
 
-    access_t * accesses = TASK_ACCESSES(task);
+    if (naccesses)
+    {
+        task_acs_info_t * acs = TASK_ACS_INFO(task);
 
-    /* access clause */
-    __kmp_omp_task_acs_to_xkomp_accesses(task, accesses, acs_list, nacs);
+        // The task was sized at allocation time: exactly (ndeps+nacs) for the
+        // patched ABI, or XKOMP_FIXED_ACCESSES reserved (and padded) slots for the
+        // stock ABI.  More accesses than were reserved cannot fit in the inline
+        // array, so reject loudly.
+        if (naccesses > acs->ac)
+            LOGGER_FATAL("OpenMP task needs %d dependences/accesses but the stock "
+                         "LLVM/clang ABI only supports %d per task; use the patched "
+                         "LLVM/clang for XKOMP.",
+                         (int) naccesses, (int) acs->ac);
 
-    /* depend clause */
-    __kmp_omp_task_deps_to_xkomp_accesses(task, accesses + nacs, dep_list, ndeps);
+        access_t * accesses = TASK_ACCESSES(task);
 
-    // process deps
-    if (ndeps + nacs)
-        xkomp->runtime.task_accesses_resolve(accesses, ndeps + nacs);
+        /* access clause (XKOMP extension) */
+        __kmp_omp_task_acs_to_xkomp_accesses(task, accesses, acs_list, nacs);
+
+        /* depend clause: aliasing deps, then non-aliasing deps */
+        __kmp_omp_task_deps_to_xkomp_accesses(task, accesses + nacs, dep_list, ndeps);
+        __kmp_omp_task_deps_to_xkomp_accesses(task, accesses + nacs + ndeps, noalias_dep_list, ndeps_noalias);
+
+        // resolve only the real accesses; the trailing reserved slots keep the
+        // inert padding installed at allocation time.
+        xkomp->runtime.task_accesses_resolve(accesses, naccesses);
+    }
 
     xkomp->runtime.task_commit(task);
 
