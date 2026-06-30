@@ -99,24 +99,28 @@ body_omp_task_replay(void * args[XKRT_CALLBACK_ARGS_MAX])
     runtime_t * runtime       = (runtime_t *) args[0];
     task_t    * original_task = (task_t *)    args[1];
     command_t * cmd           = (command_t *) args[2];
+    team_t * team             = (team_t *)    args[3];
     assert(runtime);
     assert(original_task);
     assert(cmd);
+    assert(team);
+
+//    LOGGER_FATAL("TODO: the task should be pushed to the team of the thread that initiated the replay");
 
     // TODO: instead, dupplicate that task and its data environments
-    LOGGER_WARN("TODO: dupplicate also data environment - and save 'original task' in it");
-    runtime->task_spawn([=] (runtime_t * runtime, device_t *, task_t * replay_task) {
-        # if 0
-        thread_t * thread = thread_t::get_tls();
-        assert(thread);
-        assert(thread->team);
-        const int gtid = thread->gtid;
-        # else
-        constexpr int gtid = 0;
-        # endif
-        body_omp_task_run(original_task, gtid);
-        cmd->completion_callback_raise();   // complete command after task replayed
-    });
+    constexpr xkrt_task_flag_bitfield_t flags = 0;
+    runtime->team_task_spawn<flags>(
+        team,
+        XKRT_UNSPECIFIED_DEVICE_UNIQUE_ID,
+        0,
+        nullptr,
+        nullptr,
+        [=] (runtime_t * runtime, device_t *, task_t * replay_task) {
+            constexpr int gtid = 0;
+            body_omp_task_run(original_task, gtid);
+            cmd->completion_callback_raise();   // complete command after task replayed
+        }
+    );
 }
 
 // Called from a non-device thread
@@ -135,6 +139,14 @@ body_omp_task(
     // if recording, insert a new command for replay
     if (task->flags & TASK_FLAG_RECORD)
     {
+        static bool warned = false;
+        if (warned == false)
+        {
+            LOGGER_WARN("TODO: currently, assume XKRT tasks are never released, and so the OpenMP task and data environment can be passed as such... FIX ME! If the task gets released (it should), we should instead protect here by incrementing its ref counter, and when respawning the task during the replay, replicate its data environment ?");
+            LOGGER_WARN("TODO: currently, assuming that the replay always occurs on the same team that spawned the original task");
+            warned = true;
+        }
+
         task_rec_info_t * rec = TASK_REC_INFO(task);
         assert(rec);
 
@@ -148,7 +160,8 @@ body_omp_task(
         cmdrec->command.prog.launcher.fixed.args[0] = runtime;
         cmdrec->command.prog.launcher.fixed.args[1] = task;
         cmdrec->command.prog.launcher.fixed.args[2] = &cmdrec->command;
-        static_assert(CGIR_CALLBACK_ARGS_MAX >= 3);
+        cmdrec->command.prog.launcher.fixed.args[3] = thread->team;
+        static_assert(CGIR_CALLBACK_ARGS_MAX >= 4);
     }
 }
 

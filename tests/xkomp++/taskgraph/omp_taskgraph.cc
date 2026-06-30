@@ -23,11 +23,13 @@ main(void)
     for (int b = 0; b < NB; ++b)
         v[b] = b;
 
+    int it;
+
     #pragma omp parallel num_threads(2)
     {
         #pragma omp single
         {
-            for (int it = 0; it < ITERS; ++it)
+            for (it = 0; it < ITERS; ++it)
             {
                 constexpr xkomp_taskgraph_id_t    gid   = 0;
                 constexpr xkomp_taskgraph_flags_t flags = XKOMP_TASKGRAPH_FLAG_NONE;
@@ -37,8 +39,11 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         // distinct token per block -> independent tasks
-                        #pragma omp task depend(inout: v[b]) firstprivate(b) shared(v)
-                        v[b] += 1;
+                        #pragma omp task depend(inout: v[b]) firstprivate(b) shared(v, it)
+                        {
+                            v[b] += 1;
+                            printf("Executing task %d of iter %d\n", b, it);
+                        }
                     }
                 });
             }
