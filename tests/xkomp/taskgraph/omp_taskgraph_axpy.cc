@@ -5,7 +5,7 @@
 // Blocked AXPY (y += alpha*x) split across the available devices.  The whole
 // per-iteration schedule (h2d, kernel, d2h) is recorded as a taskgraph on the
 // first iteration and replayed afterwards.  After ITERS passes the host y must
-// equal y0 + ITERS*alpha*x.  Per-device ordering is expressed with a distinct
+// equal yinit + ITERS*alpha*x.  Per-device ordering is expressed with a distinct
 // scalar token (handle-based dependence); different devices stay independent.
 
 #include "common.h"
@@ -36,13 +36,13 @@ main(void)
 
     float * x  = (float *) malloc(sizeof(float) * size);
     float * y  = (float *) malloc(sizeof(float) * size);
-    float * y0 = (float *) malloc(sizeof(float) * size);
-    CHECK(x && y && y0);
+    float * yinit = (float *) malloc(sizeof(float) * size);
+    CHECK(x && y && yinit);
     for (size_t i = 0; i < size; ++i)
     {
         x[i]  = (float) i + 0.1f;
         y[i]  = (float) i + 1.0f;
-        y0[i] = y[i];
+        yinit[i] = y[i];
     }
 
     #pragma omp parallel num_threads(2)
@@ -66,15 +66,15 @@ main(void)
                     {
                         const int j = d * BS;
 
-                        #pragma omp target update to(x[j:BS]) device(d) depend(inout: deps[d]) nowait
-                        #pragma omp target update to(y[j:BS]) device(d) depend(inout: deps[d]) nowait
+                        #pragma omp target update to(x[j:BS]) device(d) depend(out: deps[d]) nowait
+                        #pragma omp target update to(y[j:BS]) device(d) depend(out: deps[d]) nowait
 
                         #pragma omp target teams distribute parallel for device(d) \
-                                depend(inout: deps[d]) nowait firstprivate(alpha, j)
+                                depend(out: deps[d]) nowait firstprivate(alpha, j)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = alpha * x[i + j] + y[i + j];
 
-                        #pragma omp target update from(y[j:BS]) device(d) depend(inout: deps[d]) nowait
+                        #pragma omp target update from(y[j:BS]) device(d) depend(out: deps[d]) nowait
                     }
                 });
             }
@@ -88,11 +88,11 @@ main(void)
     }
 
     for (size_t i = 0; i < size; ++i)
-        CHECK_NEAR(y[i], y0[i] + ITERS * alpha * x[i], 1e-3);
+        CHECK_NEAR(y[i], yinit[i] + ITERS * alpha * x[i], 1e-3);
 
     free(x);
     free(y);
-    free(y0);
+    free(yinit);
 
     TEST_PASS();
     return 0;

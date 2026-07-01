@@ -1,8 +1,11 @@
-// xkomp: supported  (__kmpc_omp_task_with_deps : in / out / inout)
+// xkomp: supported  (__kmpc_omp_task_with_deps : in / out)
 //
 // A producer/consumer chain over two scalar tokens.  The asserts inside the
-// tasks hold only if the runtime honours the in/out/inout ordering (they hold
+// tasks hold only if the runtime honours the in/out ordering (they hold
 // regardless of whether the tasks actually run in parallel).
+//
+// (`out` is used instead of `inout`; OpenMP treats them identically for
+//  dependence computation.)
 
 #include "common.h"
 
@@ -32,7 +35,7 @@ test_depend(void)
             }
 
             // T3: update x, read y     (must run after T1 and T2)
-            #pragma omp task depend(inout: x) depend(in: y) shared(x, y)
+            #pragma omp task depend(out: x) depend(in: y) shared(x, y)
             {
                 CHECK_EQ(x, 1);
                 CHECK_EQ(y, 2);

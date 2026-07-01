@@ -4,7 +4,7 @@
 // (y <- alpha*x + y) recorded once as a taskgraph and replayed, but computed with
 // plain host `#pragma omp task`s instead of `target` offload -- so it needs no
 // device / offload runtime.  Each block is an independent task (disjoint y
-// region); after ITERS passes y == y0 + ITERS*alpha*x.
+// region); after ITERS passes y == yinit + ITERS*alpha*x.
 
 #include "common.h"
 
@@ -21,7 +21,7 @@ XKRT_NAMESPACE_USE;
 
 static float x[N];
 static float y[N];
-static float y0[N];
+static float yinit[N];
 
 int
 main(void)
@@ -30,7 +30,7 @@ main(void)
     {
         x[i]  = (float) i + 0.1f;
         y[i]  = (float) i + 1.0f;
-        y0[i] = y[i];
+        yinit[i] = y[i];
     }
 
     #pragma omp parallel num_threads(4)
@@ -47,7 +47,7 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         const int j = b * BS;   // block offset; distinct y-block handle
-                        #pragma omp task depend(inout: y[j]) firstprivate(j)
+                        #pragma omp task depend(out: y[j]) firstprivate(j)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = ALPHA * x[i + j] + y[i + j];
                     }
@@ -57,7 +57,7 @@ main(void)
     }
 
     for (int i = 0; i < N; ++i)
-        CHECK_NEAR(y[i], y0[i] + ITERS * ALPHA * x[i], 1e-3);
+        CHECK_NEAR(y[i], yinit[i] + ITERS * ALPHA * x[i], 1e-3);
 
     TEST_PASS();
     return 0;

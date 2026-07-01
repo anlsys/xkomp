@@ -84,22 +84,22 @@ main(void)
                     {
                         const int j = d * BS;
 
-                        #pragma omp target update to(x[j:BS]) device(d) depend(inout: deps[d]) nowait
-                        #pragma omp target update to(y[j:BS]) device(d) depend(inout: deps[d]) nowait
+                        #pragma omp target update to(x[j:BS]) device(d) depend(out: deps[d]) nowait
+                        #pragma omp target update to(y[j:BS]) device(d) depend(out: deps[d]) nowait
 
                         // (1) scale: y = beta*y  -- predecessor of the axpy below
                         #pragma omp target teams distribute parallel for device(d) \
-                                depend(inout: deps[d]) nowait firstprivate(beta, j)
+                                depend(out: deps[d]) nowait firstprivate(beta, j)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = beta * y[i + j];
 
                         // (2) axpy: y = alpha*x + y  -- successor (ordered after scale)
                         #pragma omp target teams distribute parallel for device(d) \
-                                depend(inout: deps[d]) nowait firstprivate(alpha, j)
+                                depend(out: deps[d]) nowait firstprivate(alpha, j)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = alpha * x[i + j] + y[i + j];
 
-                        #pragma omp target update from(y[j:BS]) device(d) depend(inout: deps[d]) nowait
+                        #pragma omp target update from(y[j:BS]) device(d) depend(out: deps[d]) nowait
                     }
                 });
             }

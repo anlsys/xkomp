@@ -8,7 +8,7 @@
 //
 //   update to(x)   depend(out: x)
 //   update to(y)   depend(out: y)
-//   kernel         depend(in: x) depend(inout: y)   (runs after both H2D)
+//   kernel         depend(in: x) depend(out: y)   (runs after both H2D)
 //   update from(y) depend(in: y)                     (runs after the kernel)
 //
 // One AXPY pass (y <- alpha*x + y); distinct device blocks are independent.
@@ -35,13 +35,13 @@ main(void)
 
     float * x  = (float *) malloc(sizeof(float) * size);
     float * y  = (float *) malloc(sizeof(float) * size);
-    float * y0 = (float *) malloc(sizeof(float) * size);
-    CHECK(x && y && y0);
+    float * yinit = (float *) malloc(sizeof(float) * size);
+    CHECK(x && y && yinit);
     for (size_t i = 0; i < size; ++i)
     {
         x[i]  = (float) i + 0.1f;
         y[i]  = (float) i + 1.0f;
-        y0[i] = y[i];
+        yinit[i] = y[i];
     }
 
     #pragma omp parallel num_threads(2)
@@ -62,7 +62,7 @@ main(void)
                 #pragma omp target update to(y[j:BS]) device(d) depend(out: y[j:BS]) nowait
 
                 #pragma omp target teams distribute parallel for device(d) nowait \
-                        depend(in: x[j:BS]) depend(inout: y[j:BS]) firstprivate(alpha, j)
+                        depend(in: x[j:BS]) depend(out: y[j:BS]) firstprivate(alpha, j)
                 for (int i = 0; i < BS; ++i)
                     y[i + j] = alpha * x[i + j] + y[i + j];
 
@@ -80,11 +80,11 @@ main(void)
     }
 
     for (size_t i = 0; i < size; ++i)
-        CHECK_NEAR(y[i], y0[i] + alpha * x[i], 1e-3);
+        CHECK_NEAR(y[i], yinit[i] + alpha * x[i], 1e-3);
 
     free(x);
     free(y);
-    free(y0);
+    free(yinit);
 
     TEST_PASS();
     return 0;

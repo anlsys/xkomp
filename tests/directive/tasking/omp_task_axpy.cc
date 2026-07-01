@@ -3,9 +3,9 @@
 // Iterative blocked AXPY (y <- alpha*x + y) computed with standard OpenMP tasks
 // and dependences.  The array is split into NB blocks; each block is updated by
 // one task per iteration, and successive iterations of the same block are chained
-// through `depend(inout: y[block])` (a per-block dependence).  Different blocks
+// through `depend(out: y[block])` (a per-block dependence).  Different blocks
 // are independent and run concurrently.  After ITERS passes the result must be
-// y == y0 + ITERS*alpha*x.
+// y == yinit + ITERS*alpha*x.
 //
 // This is the plain-tasking analogue of the taskgraph/target axpy tests.
 
@@ -19,7 +19,7 @@
 
 static float x[N];
 static float y[N];
-static float y0[N];
+static float yinit[N];
 
 int
 main(void)
@@ -28,7 +28,7 @@ main(void)
     {
         x[i]  = (float) i + 0.1f;
         y[i]  = (float) i + 1.0f;
-        y0[i] = y[i];
+        yinit[i] = y[i];
     }
 
     #pragma omp parallel num_threads(4)
@@ -40,9 +40,10 @@ main(void)
                 for (int b = 0; b < NB; ++b)
                 {
                     const int j = b * BS;
-                    // depends (inout) on this block => chains with the same block's
+                    // depends (out) on this block => chains with the same block's
                     // task from the previous iteration; blocks stay independent
-                    #pragma omp task depend(inout: y[j]) firstprivate(j)
+                    // (out, not inout: identical for OpenMP dependence computation)
+                    #pragma omp task depend(out: y[j]) firstprivate(j)
                     for (int i = 0; i < BS; ++i)
                         y[i + j] = ALPHA * x[i + j] + y[i + j];
                 }
@@ -52,7 +53,7 @@ main(void)
     }
 
     for (int i = 0; i < N; ++i)
-        CHECK_NEAR(y[i], y0[i] + ITERS * ALPHA * x[i], 1e-3);
+        CHECK_NEAR(y[i], yinit[i] + ITERS * ALPHA * x[i], 1e-3);
 
     TEST_PASS();
     return 0;

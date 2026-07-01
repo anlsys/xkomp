@@ -9,7 +9,7 @@
 // scalar token serializes that device's H2D / kernels / D2H pipeline, distinct
 // devices run concurrently, and `taskwait` joins before the host reads back.
 //
-// After ITERS kernel passes the host y must equal y0 + ITERS*alpha*x.
+// After ITERS kernel passes the host y must equal yinit + ITERS*alpha*x.
 
 #include "common.h"
 
@@ -34,14 +34,14 @@ main(void)
 
     float * x  = (float *) malloc(sizeof(float) * size);
     float * y  = (float *) malloc(sizeof(float) * size);
-    float * y0 = (float *) malloc(sizeof(float) * size);
+    float * yinit = (float *) malloc(sizeof(float) * size);
     char  * dep = (char *) malloc((size_t) ndevices);       // per-device dep tokens
-    CHECK(x && y && y0 && dep);
+    CHECK(x && y && yinit && dep);
     for (size_t i = 0; i < size; ++i)
     {
         x[i]  = (float) i + 0.1f;
         y[i]  = (float) i + 1.0f;
-        y0[i] = y[i];
+        yinit[i] = y[i];
     }
 
     #pragma omp parallel num_threads(2)
@@ -61,18 +61,18 @@ main(void)
             {
                 const int j = d * BS;
 
-                #pragma omp target update to(x[j:BS]) device(d) depend(inout: dep[d]) nowait
-                #pragma omp target update to(y[j:BS]) device(d) depend(inout: dep[d]) nowait
+                #pragma omp target update to(x[j:BS]) device(d) depend(out: dep[d]) nowait
+                #pragma omp target update to(y[j:BS]) device(d) depend(out: dep[d]) nowait
 
                 for (int it = 0; it < ITERS; ++it)
                 {
                     #pragma omp target teams distribute parallel for device(d) \
-                            depend(inout: dep[d]) nowait firstprivate(alpha, j)
+                            depend(out: dep[d]) nowait firstprivate(alpha, j)
                     for (int i = 0; i < BS; ++i)
                         y[i + j] = alpha * x[i + j] + y[i + j];
                 }
 
-                #pragma omp target update from(y[j:BS]) device(d) depend(inout: dep[d]) nowait
+                #pragma omp target update from(y[j:BS]) device(d) depend(out: dep[d]) nowait
             }
 
             // join the asynchronous pipelines of every device
@@ -87,11 +87,11 @@ main(void)
     }
 
     for (size_t i = 0; i < size; ++i)
-        CHECK_NEAR(y[i], y0[i] + ITERS * alpha * x[i], 1e-3);
+        CHECK_NEAR(y[i], yinit[i] + ITERS * alpha * x[i], 1e-3);
 
     free(x);
     free(y);
-    free(y0);
+    free(yinit);
     free(dep);
 
     TEST_PASS();

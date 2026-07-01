@@ -12,7 +12,7 @@ project(tests CXX)
 #                (parallel, worksharing/{for,sections,single}, master, masked,
 #                 barrier, atomic, critical, tasking, teams, composite, target,
 #                 access)
-#   xkomp++/     tests of the xkomp++.h C++ interfaces (e.g.
+#   xkomp/       tests of the xkomp++.h C++ interfaces (e.g.
 #                pragma_omp_taskgraph(gid, flags, [&]{ ... }))
 #
 # The source-tree hierarchy is mirrored in the build tree: a test at
@@ -76,7 +76,7 @@ function(_xkomp_test_setup tgt)
         add_dependencies(${tgt} compat_links)
     endif()
     target_link_libraries(${tgt} PRIVATE ${XKOMP} ${HWLOC_LIBRARIES} m)
-    # The xkomp++ tests include <xkrt/*.h>; link the imported target so its
+    # The xkomp/ (xkomp++.h) tests include <xkrt/*.h>; link the imported target so its
     # include directories propagate (xkomp links XKRT privately, so it does not
     # carry them transitively).  Fall back to the plain variables otherwise.
     if(TARGET XKRT::xkrt)
@@ -191,7 +191,7 @@ xkomp_add_xfail_test(directive/tasking/omp_task_if.cc          tasking)
 xkomp_add_xfail_test(directive/teams/omp_teams.cc              teams)
 
 # --- taskgraph (directive form) -- `#pragma omp taskgraph` not in the compiler
-#     yet (the xkomp++/ tests cover the same feature via pragma_omp_taskgraph)
+#     yet (the xkomp/ tests cover the same feature via pragma_omp_taskgraph)
 xkomp_add_xfail_test(directive/taskgraph/omp_taskgraph.cc      taskgraph)
 
 # --- composite : several constructs combined --------------------------------
@@ -225,17 +225,17 @@ if(XKOMP_TESTS_ACCESS)
 endif()
 
 ##############################################################################
-# xkomp++/ : tests of the xkomp++.h C++ interfaces                            #
+# xkomp/ : tests of the xkomp++.h C++ interfaces                            #
 ##############################################################################
 
 # --- taskgraph (pragma_omp_taskgraph) ---------------------------------------
-xkomp_add_test(xkomp++/taskgraph/omp_taskgraph.cc             taskgraph)
-xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_deps.cc        taskgraph)
+xkomp_add_test(xkomp/taskgraph/omp_taskgraph.cc             taskgraph)
+xkomp_add_test(xkomp/taskgraph/omp_taskgraph_deps.cc        taskgraph)
 # CPU-tasking taskgraphs (no target / offload)
-xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpy_cpu.cc    taskgraph)
-xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpby_cpu.cc   taskgraph)
+xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpy_cpu.cc    taskgraph)
+xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpby_cpu.cc   taskgraph)
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
-    xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpy.cc    taskgraph)
-    xkomp_add_test(xkomp++/taskgraph/omp_taskgraph_axpby.cc   taskgraph)
+    xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpy.cc    taskgraph)
+    xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpby.cc   taskgraph)
 endif()

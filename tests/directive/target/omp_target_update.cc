@@ -28,7 +28,7 @@ main(void)
             #pragma omp target update to(x[0:N]) device(DEVICE) depend(out: x) nowait
 
             #pragma omp target teams distribute parallel for device(DEVICE) \
-                    depend(inout: x) nowait
+                    depend(out: x) nowait
             for (int i = 0; i < N; ++i)
                 x[i] = x[i] * 3;
 

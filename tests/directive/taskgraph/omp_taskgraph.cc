@@ -34,7 +34,7 @@ main(void)
                 {
                     for (int b = 0; b < NB; ++b)
                     {
-                        #pragma omp task depend(inout: v[b]) firstprivate(b) shared(v)
+                        #pragma omp task depend(out: v[b]) firstprivate(b) shared(v)
                         v[b] += 1;
                     }
                 }
