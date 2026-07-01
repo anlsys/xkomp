@@ -204,6 +204,8 @@ if(XKOMP_TESTS_TARGET)
     xkomp_add_test(directive/target/omp_target_map.cc          target)
     xkomp_add_test(directive/target/omp_target_update.cc       target)
     xkomp_add_test(directive/target/omp_target_data.cc         target)
+    xkomp_add_test(directive/target/omp_target_axpy.cc         target)
+    xkomp_add_test(directive/target/omp_target_axpy_deps.cc    target)
 endif()
 
 # --- access clause (XKOMP extension) -- needs the patched LLVM/clang ---------
