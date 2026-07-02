@@ -14,10 +14,10 @@
 
 XKRT_NAMESPACE_USE;
 
-#define NB    8
+#define NB    16
 #define BS    64
 #define N     (NB * BS)
-#define ITERS 4
+#define ITERS 16
 #define ALPHA 0.7f
 #define BETA  0.5f
 
@@ -43,7 +43,7 @@ main(void)
             ref[i] = ALPHA * x[i] + ref[i];     // axpy
         }
 
-    #pragma omp parallel num_threads(4)
+    #pragma omp parallel
     {
         #pragma omp single
         {
