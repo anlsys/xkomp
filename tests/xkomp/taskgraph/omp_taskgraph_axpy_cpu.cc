@@ -47,7 +47,7 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         const int j = b * BS;   // block offset; distinct y-block handle
-                        #pragma omp task depend(out: y[j]) firstprivate(j)
+                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = ALPHA * x[i + j] + y[i + j];
                     }
