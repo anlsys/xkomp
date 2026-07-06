@@ -95,7 +95,18 @@ typedef struct ident {
   }
 } ident_t;
 
-typedef kmp_int32 (*kmp_routine_entry_t)(kmp_int32, void *);
+/*
+ * XKOMP task-body ABI.
+ *
+ * The outlined OpenMP task routine matches the CGIR PROG launcher interface
+ * `void func(void ** args)`, where `args` is the task's shareds region laid out
+ * by the compiler as an array of pointers-to-captured-values (see
+ * kargs_from_task()).  This lets CGIR treat an OpenMP task body as an ordinary
+ * fusible program (prog-fuse), instead of the previous
+ * `kmp_int32 (*)(kmp_int32 gtid, void * kmp_task_t)` proxy that hid the captured
+ * data behind the kmp_task_t and could not be fused.
+ */
+typedef void (*kmp_routine_entry_t)(void ** /* args */);
 
 typedef union kmp_cmplrdata {
   kmp_int32 priority; /**< priority specified by user for the task */

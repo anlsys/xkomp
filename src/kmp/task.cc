@@ -7,6 +7,19 @@
 typedef struct  task_args_t
 {
     task_t * task;
+
+    /* The argument array handed to the outlined task routine
+     * (kmp_routine_entry_t == void(*)(void**)); see kargs_from_task.
+     *
+     * kargs[0] is the task's kmp_task_t* (== the kmp_task_t that immediately
+     * follows this struct). The compiler-emitted routine (the outlined
+     * `.omp_task_entry.`) reads it back as `args[0]` to recover the task and
+     * access its shareds/privates. A single stable pointer slot is all the
+     * routine consumes, which keeps it a valid CGIR PROG wrapper: prog-fuse
+     * copies kargs[0] verbatim, so a fused/relocated args buffer still yields
+     * the right task pointer. */
+    void * kargs[1];
+
     // followed by the kmp task
 }               task_args_t;
 
@@ -51,6 +64,25 @@ ktask_from_task(task_t * task)
     return ktask;
 }
 
+/*
+ * Return the task's argument array: the `void ** args` passed to the outlined
+ * task routine (kmp_routine_entry_t == void(*)(void**)).  args[0] is the task's
+ * kmp_task_t*; the compiler-emitted routine reads it back to recover the task
+ * and access its shareds/privates.  This is a valid CGIR PROG wrapper interface
+ * (a program consuming a void** args block), so a recorded task body can be
+ * fused by CGIR's prog-fuse pass.
+ */
+static inline void **
+kargs_from_task(task_t * task)
+{
+    task_args_t * args = (task_args_t *) TASK_ARGS(task);
+    assert(args);
+    return args->kargs;
+}
+
+/* number of void* slots in the task's args array consumed by the routine */
+static constexpr size_t KARGS_NSLOTS = 1;
+
 static inline task_t *
 task_from_ktask(kmp_task_t * ktask)
 {
@@ -80,47 +112,17 @@ task_pad_accesses(task_t * task, access_t * accesses, kmp_int32 from, kmp_int32 
         new (accesses + i) access_t(task, ACCESS_MODE_V, ACCESS_CONCURRENCY_SEQUENTIAL, ACCESS_SCOPE_NONUNIFIED);
 }
 
-// Launch the routine associated with an openmp task
+// Launch the routine associated with an openmp task. The routine matches the
+// CGIR PROG launcher interface `void func(void ** args)`; see kargs_from_task.
 static inline void
 body_omp_task_run(
-    task_t * task,
-    int32_t gtid
+    task_t * task
 ) {
     kmp_task_t * ktask = ktask_from_task(task);
     assert(ktask);
     assert(ktask->routine);
-    ktask->routine(gtid, ktask);
-}
-
-// Called on replay of a task
-static inline void
-body_omp_task_replay(void * args[XKRT_CALLBACK_ARGS_MAX])
-{
-    runtime_t * runtime       = (runtime_t *) args[0];
-    task_t    * original_task = (task_t *)    args[1];
-    command_t * cmd           = (command_t *) args[2];
-    team_t * team             = (team_t *)    args[3];
-    assert(runtime);
-    assert(original_task);
-    assert(cmd);
-    assert(team);
-
-//    LOGGER_FATAL("TODO: the task should be pushed to the team of the thread that initiated the replay");
-
-    // TODO: instead, dupplicate that task and its data environments
-    constexpr xkrt_task_flag_bitfield_t flags = 0;
-    runtime->team_task_spawn<flags>(
-        team,
-        XKRT_UNSPECIFIED_DEVICE_UNIQUE_ID,
-        0,
-        nullptr,
-        nullptr,
-        [=] (runtime_t * runtime, device_t *, task_t * replay_task) {
-            constexpr int gtid = 0;
-            body_omp_task_run(original_task, gtid);
-            cmd->completion_callback_raise();   // complete command after task replayed
-        }
-    );
+    void ** args = kargs_from_task(task);
+    ktask->routine(args);
 }
 
 // Called from a non-device thread
@@ -134,7 +136,7 @@ body_omp_task(
     assert(thread);
     assert(thread->team);
 
-    body_omp_task_run(task, thread->gtid);
+    body_omp_task_run(task);
 
     // if recording, insert a new command for replay
     if (task->flags & TASK_FLAG_RECORD)
@@ -143,25 +145,33 @@ body_omp_task(
         if (warned == false)
         {
             LOGGER_WARN("TODO: currently, assume XKRT tasks are never released, and so the OpenMP task and data environment can be passed as such... FIX ME! If the task gets released (it should), we should instead protect here by incrementing its ref counter, and when respawning the task during the replay, replicate its data environment ?");
-            LOGGER_WARN("TODO: currently, assuming that the replay always occurs on the same team that spawned the original task");
             warned = true;
         }
 
         task_rec_info_t * rec = TASK_REC_INFO(task);
         assert(rec);
 
-        /* insert a host routine that submit a new task when the command is ready */
+        /* Record a PROG command for replay. The program is the outlined task
+         * body itself (`void routine(void ** args)`) together with the task's
+         * args array; its launch mode is TASK_SPAWN, so on replay the runtime
+         * re-spawns a task (in the replaying thread's team) that runs the body
+         * and completes the command. Recording the body as a plain variadic
+         * program (rather than a fixed host callback that did the task-spawn)
+         * is what lets CGIR fuse consecutive OpenMP task bodies (prog-fuse). */
+        kmp_task_t * ktask = ktask_from_task(task);
+        assert(ktask);
+        assert(ktask->routine);
+
         task_command_record_t * cmdrec = rec->commands.put();
         constexpr cgir::command_type_t ctype = cgir::COMMAND_TYPE_PROG;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
         cmdrec->state = task->state.value;
         new (&cmdrec->command) command_t(ctype, flags);
-        cmdrec->command.prog.launcher.fixed.fn      = body_omp_task_replay;
-        cmdrec->command.prog.launcher.fixed.args[0] = runtime;
-        cmdrec->command.prog.launcher.fixed.args[1] = task;
-        cmdrec->command.prog.launcher.fixed.args[2] = &cmdrec->command;
-        cmdrec->command.prog.launcher.fixed.args[3] = thread->team;
-        static_assert(CGIR_CALLBACK_ARGS_MAX >= 4);
+        cmdrec->command.prog.launch_mode                   = cgir::CGIR_COMMAND_PROG_LAUNCH_MODE_TASK_SPAWN;
+        cmdrec->command.prog.launcher.variadic.fn          = (void *) ktask->routine;
+        cmdrec->command.prog.launcher.variadic.args        = (void *) kargs_from_task(task);
+        cmdrec->command.prog.launcher.variadic.args_size   = KARGS_NSLOTS * sizeof(void *);
+        cmdrec->command.prog.launcher.variadic._args_owned = false;  // owned by the task's data environment
     }
 }
 
@@ -172,9 +182,7 @@ body_omp_task_target(
     device_t * device,
     task_t * task
 ) {
-    thread_t * thread = thread_t::get_tls();
-    int32_t gtid = thread->gtid;
-    body_omp_task_run(task, gtid);
+    body_omp_task_run(task);
 }
 
 // Get (or lazily create) the task format for a source location (ident_t *
@@ -321,6 +329,10 @@ task_alloc(
     // init kmp task info
     kmp_task_t * ktask = (kmp_task_t *) (args + 1);
     assert(ktask);
+
+    /* args[0] handed to the outlined routine is the task's kmp_task_t* (see
+     * kargs_from_task): the routine reads it back to recover shareds/privates. */
+    args->kargs[0] = (void *) ktask;
 
     ktask->shareds = (void *) (sizeof_shareds <= 0 ? 0 : ((uintptr_t) ktask) + sizeof_kmp_task_t);
     ktask->routine = task_entry;
