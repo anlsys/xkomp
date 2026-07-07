@@ -56,6 +56,99 @@ option(XKOMP_TESTS_TARGET
 option(XKOMP_TESTS_ACCESS
        "Build tests for the XKOMP 'access' clause (require the patched LLVM/clang)" ON)
 
+# ---------------------------------------------------------------------------
+# Offload target detection (for `omp target` tests)
+# ---------------------------------------------------------------------------
+# `target` tests must be compiled for the GPU actually present on the build
+# machine (otherwise `omp target` regions never reach the device). We detect the
+# offload triple + arch with the arch-probe tools that ship next to the compiler
+# (nvptx-arch / amdgpu-arch -- the same probes clang's `--offload-arch=native`
+# uses), falling back to `nvidia-smi`. Results are overridable cache variables:
+#   -DXKOMP_TESTS_OFFLOAD_TRIPLE=nvptx64-nvidia-cuda -DXKOMP_TESTS_OFFLOAD_ARCH=sm_80
+# When neither is found (and none given), offload is disabled and the `omp
+# target` tests are skipped.
+set(XKOMP_TESTS_OFFLOAD_TRIPLE "" CACHE STRING
+    "Offload target triple for 'omp target' tests (auto-detected if empty)")
+set(XKOMP_TESTS_OFFLOAD_ARCH   "" CACHE STRING
+    "Offload GPU arch for 'omp target' tests, e.g. sm_80 / gfx90a (auto-detected if empty)")
+option(XKOMP_TESTS_OFFLOAD_MANDATORY
+       "Compile target tests with -fopenmp-offload-mandatory (enforce GPU offload)" ON)
+
+# effective values (seeded from the cache overrides, else auto-detected)
+set(_XK_OFF_TRIPLE "${XKOMP_TESTS_OFFLOAD_TRIPLE}")
+set(_XK_OFF_ARCH   "${XKOMP_TESTS_OFFLOAD_ARCH}")
+
+# only probe for a GPU when target tests are actually wanted
+if(XKOMP_TESTS_TARGET AND (NOT _XK_OFF_TRIPLE OR NOT _XK_OFF_ARCH))
+    get_filename_component(_xk_cc_bin "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    set(_xk_det_triple "")
+    set(_xk_det_arch   "")
+
+    # 1) NVIDIA via nvptx-arch (ships with clang/offload; prints e.g. "sm_80")
+    find_program(XKOMP_NVPTX_ARCH nvptx-arch HINTS "${_xk_cc_bin}")
+    if(XKOMP_NVPTX_ARCH)
+        execute_process(COMMAND "${XKOMP_NVPTX_ARCH}"
+            OUTPUT_VARIABLE _xk_out OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET RESULT_VARIABLE _xk_rc)
+        if(_xk_rc EQUAL 0 AND _xk_out)
+            string(REGEX MATCHALL "[^\r\n]+" _xk_lines "${_xk_out}")
+            list(GET _xk_lines 0 _xk_det_arch)          # first GPU's arch
+            set(_xk_det_triple "nvptx64-nvidia-cuda")
+        endif()
+    endif()
+
+    # 2) AMD via amdgpu-arch (prints e.g. "gfx90a")
+    if(NOT _xk_det_arch)
+        find_program(XKOMP_AMDGPU_ARCH amdgpu-arch HINTS "${_xk_cc_bin}")
+        if(XKOMP_AMDGPU_ARCH)
+            execute_process(COMMAND "${XKOMP_AMDGPU_ARCH}"
+                OUTPUT_VARIABLE _xk_out OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET RESULT_VARIABLE _xk_rc)
+            if(_xk_rc EQUAL 0 AND _xk_out)
+                string(REGEX MATCHALL "[^\r\n]+" _xk_lines "${_xk_out}")
+                list(GET _xk_lines 0 _xk_det_arch)
+                set(_xk_det_triple "amdgcn-amd-amdhsa")
+            endif()
+        endif()
+    endif()
+
+    # 3) NVIDIA fallback via nvidia-smi (compute capability "8.0" -> "sm_80")
+    if(NOT _xk_det_arch)
+        find_program(XKOMP_NVIDIA_SMI nvidia-smi)
+        if(XKOMP_NVIDIA_SMI)
+            execute_process(COMMAND "${XKOMP_NVIDIA_SMI}"
+                    --query-gpu=compute_cap --format=csv,noheader,nounits
+                OUTPUT_VARIABLE _xk_out OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET RESULT_VARIABLE _xk_rc)
+            if(_xk_rc EQUAL 0 AND _xk_out)
+                string(REGEX MATCHALL "[^\r\n]+" _xk_lines "${_xk_out}")
+                list(GET _xk_lines 0 _xk_cap)           # e.g. "8.0"
+                string(REPLACE "." "" _xk_cap "${_xk_cap}")
+                set(_xk_det_arch "sm_${_xk_cap}")
+                set(_xk_det_triple "nvptx64-nvidia-cuda")
+            endif()
+        endif()
+    endif()
+
+    if(NOT _XK_OFF_TRIPLE)
+        set(_XK_OFF_TRIPLE "${_xk_det_triple}")
+    endif()
+    if(NOT _XK_OFF_ARCH)
+        set(_XK_OFF_ARCH "${_xk_det_arch}")
+    endif()
+endif()
+
+if(XKOMP_TESTS_TARGET AND _XK_OFF_TRIPLE AND _XK_OFF_ARCH)
+    set(XKOMP_TESTS_OFFLOAD ON)
+    message(STATUS "XKOMP tests: 'omp target' offload -> ${_XK_OFF_TRIPLE} (${_XK_OFF_ARCH})")
+elseif(XKOMP_TESTS_TARGET)
+    set(XKOMP_TESTS_OFFLOAD OFF)
+    message(STATUS "XKOMP tests: no offload GPU detected -- 'omp target' tests are SKIPPED "
+                   "(override with -DXKOMP_TESTS_OFFLOAD_TRIPLE=<triple> -DXKOMP_TESTS_OFFLOAD_ARCH=<arch>)")
+else()
+    set(XKOMP_TESTS_OFFLOAD OFF)  # target tests disabled -> offload irrelevant
+endif()
+
 set(XKOMP_TEST_INCLUDES
     ${CMAKE_CURRENT_SOURCE_DIR}        # tests/common.h
     ${CMAKE_SOURCE_DIR}/include        # <xkomp/*.h>
@@ -132,6 +225,36 @@ function(xkomp_add_xfail_test src label)
     set_tests_properties("${_xk_test}" PROPERTIES LABELS "unsupported;${label}")
 endfunction()
 
+# Add the GPU offload flags to a target for the detected/overridden device.
+function(_xkomp_test_offload_setup tgt)
+    set(_off
+        -fopenmp-targets=${_XK_OFF_TRIPLE}
+        --offload-arch=${_XK_OFF_ARCH})
+    if(XKOMP_TESTS_OFFLOAD_MANDATORY)
+        list(APPEND _off -fopenmp-offload-mandatory)  # no host fallback: must offload
+    endif()
+    # offload flags are needed at BOTH compile and link (the driver embeds the
+    # device image and links the offload runtime at link time)
+    target_compile_options(${tgt} PRIVATE ${_off})
+    target_link_options(${tgt}    PRIVATE ${_off})
+endfunction()
+
+# Expected-to-PASS `omp target` test: like xkomp_add_test but compiled for the
+# machine's GPU. Skipped entirely when no offload device was detected (see the
+# offload-detection block above), since it cannot validate offload without one.
+function(xkomp_add_target_test src label)
+    if(NOT XKOMP_TESTS_OFFLOAD)
+        return()
+    endif()
+    _xkomp_test_paths("${src}")
+    add_executable(${_xk_tgt} ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    _xkomp_test_offload_setup(${_xk_tgt})
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};gpu")
+endfunction()
+
 ##############################################################################
 # directive/ : standard C/C++ OpenMP (#pragma omp ...)                         #
 ##############################################################################
@@ -200,13 +323,13 @@ xkomp_add_test(directive/composite/omp_manual_reduction.cc     composite)
 xkomp_add_test(directive/composite/omp_producer_consumer.cc    composite)
 xkomp_add_test(directive/composite/omp_parallel_matvec.cc      composite)
 
-# --- target -- needs the offload runtime, hence guarded ---------------------
+# --- target -- needs the offload runtime + a GPU, hence guarded -------------
 if(XKOMP_TESTS_TARGET)
-    xkomp_add_test(directive/target/omp_target_map.cc          target)
-    xkomp_add_test(directive/target/omp_target_update.cc       target)
-    xkomp_add_test(directive/target/omp_target_data.cc         target)
-    xkomp_add_test(directive/target/omp_target_axpy.cc         target)
-    xkomp_add_test(directive/target/omp_target_axpy_deps.cc    target)
+    xkomp_add_target_test(directive/target/omp_target_map.cc          target)
+    xkomp_add_target_test(directive/target/omp_target_update.cc       target)
+    xkomp_add_target_test(directive/target/omp_target_data.cc         target)
+    xkomp_add_target_test(directive/target/omp_target_axpy.cc         target)
+    xkomp_add_target_test(directive/target/omp_target_axpy_deps.cc    target)
 endif()
 
 # --- access clause (XKOMP extension) -- needs the patched LLVM/clang ---------
@@ -216,11 +339,11 @@ if(XKOMP_TESTS_ACCESS)
     xkomp_add_test(directive/access/omp_access_concurrent.cc   access)
     xkomp_add_test(directive/access/omp_access_war_waw.cc      access)
     xkomp_add_test(directive/access/omp_access_dag.cc          access)
-    # target + access: also needs the offload runtime
+    # target + access: also needs the offload runtime + a GPU
     if(XKOMP_TESTS_TARGET)
-        xkomp_add_test(directive/access/omp_access_target.cc          access)
-        xkomp_add_test(directive/access/omp_access_target_overlap.cc  access)
-        xkomp_add_test(directive/access/omp_access_stencil_target.cc  access)
+        xkomp_add_target_test(directive/access/omp_access_target.cc          access)
+        xkomp_add_target_test(directive/access/omp_access_target_overlap.cc  access)
+        xkomp_add_target_test(directive/access/omp_access_stencil_target.cc  access)
     endif()
 endif()
 
@@ -237,6 +360,6 @@ xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpy_cpu_global.cc taskgraph)
 xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpby_cpu.cc       taskgraph)
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
-    xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpy.cc        taskgraph)
-    xkomp_add_test(xkomp/taskgraph/omp_taskgraph_axpby.cc       taskgraph)
+    xkomp_add_target_test(xkomp/taskgraph/omp_taskgraph_axpy.cc        taskgraph)
+    xkomp_add_target_test(xkomp/taskgraph/omp_taskgraph_axpby.cc       taskgraph)
 endif()
