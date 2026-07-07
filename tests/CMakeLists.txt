@@ -360,5 +360,5 @@ xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_host_deps.cc         taskgraph)
 
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
-    xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_target.cc      taskgraph)
+    xkomp_add_target_test(xkomp/taskgraph/xkomp_taskgraph_axpby_target.cc  taskgraph)
 endif()
