@@ -28,6 +28,7 @@ main(void)
         TEST_PASS();
         return 0;
     }
+    printf("[xkomp-test] %s: %d devices available\n", __FILE__, ndevices);
 
     const size_t size  = (size_t) BS * (size_t) ndevices;   // divides evenly
     const float  alpha = 0.7f;
