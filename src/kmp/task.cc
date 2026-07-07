@@ -71,6 +71,11 @@ ktask_from_task(task_t * task)
  * and access its shareds/privates.  This is a valid CGIR PROG wrapper interface
  * (a program consuming a void** args block), so a recorded task body can be
  * fused by CGIR's prog-fuse pass.
+ *
+ * Design note: reaching captured data through `tt` (args[0]) — rather than
+ * exposing each captured value as its own args slot — is what limits CGIR to
+ * PROGRAM-level fusion of task bodies (no cross-task LOOP fusion). See the
+ * recording site in body_omp_task() for details.
  */
 static inline void **
 kargs_from_task(task_t * task)
@@ -157,7 +162,17 @@ body_omp_task(
          * re-spawns a task (in the replaying thread's team) that runs the body
          * and completes the command. Recording the body as a plain variadic
          * program (rather than a fixed host callback that did the task-spawn)
-         * is what lets CGIR fuse consecutive OpenMP task bodies (prog-fuse). */
+         * is what lets CGIR fuse consecutive OpenMP task bodies (prog-fuse).
+         *
+         * NOTE (loop fusion): the single recorded arg slot is the kmp_task_t*
+         * (args[0] == tt; see kargs_from_task). The body reaches its captured
+         * data indirectly through `tt` (shareds/privates), NOT as distinct
+         * per-value slots, so CGIR can fuse task bodies at the PROGRAM level
+         * (one wrapper calling each) but NOT at the LOOP level: each body keeps
+         * its own base pointers/offsets, which LLVM cannot align across bodies.
+         * TODO: to enable cross-task loop fusion, record the captured arrays and
+         * scalar offsets as separate deduplicable arg slots (leaf-kernel form)
+         * instead of the opaque args[0]==tt slice. */
         kmp_task_t * ktask = ktask_from_task(task);
         assert(ktask);
         assert(ktask->routine);
@@ -168,9 +183,9 @@ body_omp_task(
         cmdrec->state = task->state.value;
         new (&cmdrec->command) command_t(ctype, flags);
         cmdrec->command.prog.launch_mode                   = cgir::CGIR_COMMAND_PROG_LAUNCH_MODE_TASK_SPAWN;
-        cmdrec->command.prog.launcher.variadic.fn          = (void *) ktask->routine;
-        cmdrec->command.prog.launcher.variadic.args        = (void *) kargs_from_task(task);
-        cmdrec->command.prog.launcher.variadic.args_size   = KARGS_NSLOTS * sizeof(void *);
+        cmdrec->command.prog.launcher.variadic.fn          = ktask->routine;              // void(*)(void**)
+        cmdrec->command.prog.launcher.variadic.args        = kargs_from_task(task);       // void** (args[0] == tt)
+        cmdrec->command.prog.launcher.variadic.n_args      = KARGS_NSLOTS;
         cmdrec->command.prog.launcher.variadic._args_owned = false;  // owned by the task's data environment
     }
 }
