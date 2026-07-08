@@ -219,9 +219,18 @@ body_omp_task_target(
     body_omp_task_run(task);
 }
 
-// Get (or lazily create) the task format for a source location (ident_t *
-// loc_ref), copying the per-target functions from the shared 'omp-task'
-// template and attaching the construct's LLVM-IR.
+// Get (or lazily create) the task format for a task construct, copying the
+// per-target functions from the shared 'omp-task' template and attaching the
+// construct's LLVM-IR.
+//
+// The format is keyed by the embedded IR pointer, NOT by the source location
+// (loc_ref): without -g/source info clang emits a single dummy ident
+// (";unknown;unknown;0;0;;") shared by every task construct in the TU, so keying
+// on loc_ref would collapse distinct task bodies onto the first format and, under
+// JIT, run that one body for all of them. The IR is emitted once per construct
+// (a distinct .omp_task_ir.<fn> global), so its pointer uniquely identifies the
+// body. We fall back to loc_ref only when there is no IR (e.g. target
+// directives, which do not use the host JIT path).
 static inline task_format_id_t
 get_or_create_loc_format(
     xkomp_t * xkomp,
@@ -231,11 +240,12 @@ get_or_create_loc_format(
     void * ir_externs,
     size_t ir_externs_count
 ) {
-    // no source location: fall back to the shared template format
-    if (loc_ref == NULL)
+    // no per-construct key at all: fall back to the shared template format
+    if (loc_ref == NULL && (ir == NULL || ir_size == 0))
         return xkomp->formats.kmp.host;
 
-    void * key = (void *) loc_ref;
+    // prefer the IR pointer as the per-construct key (see comment above)
+    void * key = (ir != NULL && ir_size > 0) ? ir : (void *) loc_ref;
 
     SPINLOCK_LOCK(xkomp->formats.kmp.per_loc_lock);
 
@@ -255,7 +265,7 @@ get_or_create_loc_format(
         format.suggest = tmpl->suggest;
 
         // label from the source location string ("file;func;line;line")
-        if (loc_ref->psource)
+        if (loc_ref && loc_ref->psource)
             snprintf(format.label, sizeof(format.label), "%s", loc_ref->psource);
         else
             snprintf(format.label, sizeof(format.label), "omp-task");
