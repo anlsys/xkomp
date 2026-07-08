@@ -17,7 +17,7 @@ test_mutexinoutset(void)
 
             for (int i = 0; i < NUM_TASKS; ++i)
             {
-                #pragma omp task depend(mutexinoutset: x) shared(x)
+                #pragma omp task depend(mutexinoutset: x) shared(x) default(none)
                 {
                     // no atomic on purpose: mutexinoutset must serialize these
                     x = x + 1;

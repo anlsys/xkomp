@@ -23,16 +23,16 @@ test_pipeline(void)
         {
             for (int s = 0; s < ITEMS; ++s)
             {
-                #pragma omp task depend(out: a[s]) firstprivate(s) shared(a)
+                #pragma omp task depend(out: a[s]) firstprivate(s) shared(a) default(none)
                 a[s] = s;
 
-                #pragma omp task depend(in: a[s]) depend(out: b[s]) firstprivate(s) shared(a, b)
+                #pragma omp task depend(in: a[s]) depend(out: b[s]) firstprivate(s) shared(a, b) default(none)
                 {
                     CHECK_EQ(a[s], s);
                     b[s] = a[s] * 2;
                 }
 
-                #pragma omp task depend(in: b[s]) depend(out: c[s]) firstprivate(s) shared(b, c)
+                #pragma omp task depend(in: b[s]) depend(out: c[s]) firstprivate(s) shared(b, c) default(none)
                 {
                     CHECK_EQ(b[s], s * 2);
                     c[s] = b[s] + 1;

@@ -14,7 +14,7 @@ main(void)
     {
         #pragma omp single
         {
-            #pragma omp task if(cond) shared(x)
+            #pragma omp task if(cond) shared(x) default(none)
             x = 7;
 
             #pragma omp taskwait

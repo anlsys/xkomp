@@ -39,7 +39,7 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         // distinct token per block -> independent tasks
-                        #pragma omp task depend(out: v[b]) firstprivate(b) shared(v, it)
+                        #pragma omp task depend(out: v[b]) firstprivate(b) shared(v, it) default(none)
                         {
                             v[b] += 1;
                             printf("Executing task %d of iter %d\n", b, it);

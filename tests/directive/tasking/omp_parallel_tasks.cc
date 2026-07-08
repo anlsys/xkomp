@@ -24,7 +24,7 @@ test_parallel_tasks(void)
 
         for (int k = 0; k < PER; ++k)
         {
-            #pragma omp task firstprivate(tid, k) shared(done)
+            #pragma omp task firstprivate(tid, k) shared(done) default(none)
             done[tid * PER + k] = 1;
         }
         #pragma omp taskwait   // each thread joins its own children

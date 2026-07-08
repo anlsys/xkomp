@@ -23,10 +23,10 @@ tree_sum(const long * a, int lo, int hi)
     const int mid = (lo + hi) / 2;
     long left = 0, right = 0;
 
-    #pragma omp task shared(left) firstprivate(a, lo, mid)
+    #pragma omp task shared(left) firstprivate(a, lo, mid) default(none)
     left = tree_sum(a, lo, mid);
 
-    #pragma omp task shared(right) firstprivate(a, mid, hi)
+    #pragma omp task shared(right) firstprivate(a, mid, hi) default(none)
     right = tree_sum(a, mid, hi);
 
     #pragma omp taskwait

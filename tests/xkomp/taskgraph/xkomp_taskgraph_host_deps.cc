@@ -32,10 +32,10 @@ main(void)
 
                 pragma_omp_taskgraph(gid, flags, [&] (void)
                 {
-                    #pragma omp task depend(out: x) shared(x)
+                    #pragma omp task depend(out: x) shared(x) default(none)
                     x += 1;
 
-                    #pragma omp task depend(out: x) shared(x)
+                    #pragma omp task depend(out: x) shared(x) default(none)
                     x *= 2;
                 });
             }

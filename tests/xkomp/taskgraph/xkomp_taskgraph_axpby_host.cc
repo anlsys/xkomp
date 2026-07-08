@@ -59,7 +59,7 @@ main(void)
                         const int j = b * BS;
 
                         // (1) scale: y = beta*y  -- predecessor
-                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y) default(none)
+                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(y) default(none)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = BETA * y[i + j];
 

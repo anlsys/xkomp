@@ -28,7 +28,7 @@ test_stencil_dag(void)
         #pragma omp single
         {
             // producer: initialise the whole padded domain (u[i] = i)
-            #pragma omp task access(write: u[-GHOST : N + 2*GHOST])
+            #pragma omp task access(write: u[-GHOST : N + 2*GHOST]) default(none)
             {
                 for (int i = -GHOST ; i < N + GHOST ; ++i)
                     u[i] = (double) i;
@@ -40,7 +40,7 @@ test_stencil_dag(void)
             {
                 #pragma omp task firstprivate(t)                       \
                         access(read:  u[t*BS - GHOST : BS + 2*GHOST])  \
-                        access(write: dag_out[t*BS : BS])
+                        access(write: dag_out[t*BS : BS]) default(none)
                 {
                     for (int k = t * BS ; k < (t + 1) * BS ; ++k)
                         dag_out[k] = u[k-1] + u[k] + u[k+1];
@@ -48,7 +48,7 @@ test_stencil_dag(void)
             }
 
             // consumer: reads the whole output -> after every tile
-            #pragma omp task access(read: dag_out[0:N])
+            #pragma omp task access(read: dag_out[0:N]) default(none)
             {
                 for (int k = 0 ; k < N ; ++k)
                     CHECK_NEAR(dag_out[k], 3.0 * k, 1e-9);   // (k-1) + k + (k+1)

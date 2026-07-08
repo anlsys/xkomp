@@ -21,7 +21,7 @@ test_inoutset(void)
             int consumer_saw = -1;
 
             // producer
-            #pragma omp task depend(out: x) shared(produced)
+            #pragma omp task depend(out: x) shared(produced) default(none)
             {
                 produced = 1;
             }
@@ -29,7 +29,7 @@ test_inoutset(void)
             // inoutset set: each runs after the producer; siblings may overlap
             for (int i = 0; i < M; ++i)
             {
-                #pragma omp task depend(inoutset: x) firstprivate(i) shared(produced, set_count)
+                #pragma omp task depend(inoutset: x) firstprivate(i) shared(produced, set_count) default(none)
                 {
                     CHECK_EQ(produced, 1);   // ordered after producer
                     #pragma omp atomic
@@ -38,7 +38,7 @@ test_inoutset(void)
             }
 
             // consumer: must run after the entire inoutset set
-            #pragma omp task depend(in: x) shared(set_count, consumer_saw)
+            #pragma omp task depend(in: x) shared(set_count, consumer_saw) default(none)
             {
                 consumer_saw = set_count;
             }

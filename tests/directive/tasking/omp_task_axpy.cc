@@ -43,7 +43,7 @@ main(void)
                     // depends (out) on this block => chains with the same block's
                     // task from the previous iteration; blocks stay independent
                     // (out, not inout: identical for OpenMP dependence computation)
-                    #pragma omp task depend(out: y[j]) firstprivate(j)
+                    #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y) default(none)
                     for (int i = 0; i < BS; ++i)
                         y[i + j] = ALPHA * x[i + j] + y[i + j];
                 }

@@ -36,7 +36,7 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         const int j = b * BS;
-                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y)
+                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y) default(none)
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = ALPHA * x[i + j] + y[i + j];
                     }

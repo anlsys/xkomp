@@ -18,7 +18,7 @@ test_many_tasks(void)
         {
             for (int i = 0; i < NUM_TASKS; ++i)
             {
-                #pragma omp task firstprivate(i) shared(done, executed)
+                #pragma omp task firstprivate(i) shared(done, executed) default(none)
                 {
                     done[i] = 1;
                     #pragma omp atomic
@@ -44,7 +44,7 @@ test_data_sharing(void)
     {
         #pragma omp single
         {
-            #pragma omp task firstprivate(x) shared(y)
+            #pragma omp task firstprivate(x) shared(y) default(none)
             {
                 CHECK_EQ(x, 42);
                 y = x + 1;

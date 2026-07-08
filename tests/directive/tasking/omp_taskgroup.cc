@@ -19,7 +19,7 @@ test_taskgroup(void)
             {
                 for (int i = 0; i < NUM_TASKS; ++i)
                 {
-                    #pragma omp task firstprivate(i) shared(done)
+                    #pragma omp task firstprivate(i) shared(done) default(none)
                     done[i] = 1;
                 }
             }

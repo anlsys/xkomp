@@ -19,7 +19,7 @@ test_untied(void)
         {
             for (int i = 0; i < NUM_TASKS; ++i)
             {
-                #pragma omp task untied firstprivate(i) shared(done, executed)
+                #pragma omp task untied firstprivate(i) shared(done, executed) default(none)
                 {
                     done[i] = 1;
                     #pragma omp atomic

@@ -37,10 +37,10 @@ main(void)
                     for (int b = 0; b < NB; ++b)
                     {
                         const int j = b * BS;
-                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y)   // scale
+                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(y) default(none)   // scale
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = BETA * y[i + j];
-                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y)   // axpy
+                        #pragma omp task depend(out: y[j]) firstprivate(j) shared(x, y) default(none)   // axpy
                         for (int i = 0; i < BS; ++i)
                             y[i + j] = ALPHA * x[i + j] + y[i + j];
                     }

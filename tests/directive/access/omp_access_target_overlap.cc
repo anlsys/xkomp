@@ -41,7 +41,7 @@ main(void)
 
             // host reads [N/4, N): partially overlaps the device write on
             // [N/4, 3N/4); [3N/4, N) was never sent to the device
-            #pragma omp task access(read: x[N/4 : 3*N/4])
+            #pragma omp task access(read: x[N/4 : 3*N/4]) default(none)
             {
                 for (int i = N/4   ; i < 3*N/4 ; ++i)
                     CHECK_EQ(x[i], 2 * i);     // fetched back from the device

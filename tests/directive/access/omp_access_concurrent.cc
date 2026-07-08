@@ -22,14 +22,14 @@ test_concurrent(void)
         {
             // two concurrent writers on the same region; they touch disjoint
             // elements (even / odd) and may execute in parallel
-            #pragma omp task access(concurrentwrite: x[0:N])
+            #pragma omp task access(concurrentwrite: x[0:N]) default(none)
             { for (int i = 0 ; i < N ; i += 2) x[i] = i; }
 
-            #pragma omp task access(concurrentwrite: x[0:N])
+            #pragma omp task access(concurrentwrite: x[0:N]) default(none)
             { for (int i = 1 ; i < N ; i += 2) x[i] = i; }
 
             // reader: after BOTH concurrent writers (write -> read)
-            #pragma omp task access(read: x[0:N])
+            #pragma omp task access(read: x[0:N]) default(none)
             { for (int i = 0 ; i < N ; ++i) CHECK_EQ(x[i], i); }
 
             #pragma omp taskwait

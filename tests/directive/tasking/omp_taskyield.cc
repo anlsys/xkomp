@@ -12,7 +12,7 @@ test_taskyield(void)
     {
         #pragma omp single
         {
-            #pragma omp task shared(done)
+            #pragma omp task shared(done) default(none)
             {
                 #pragma omp taskyield
                 done = 1;

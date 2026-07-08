@@ -17,12 +17,12 @@ test_taskwait(void)
     {
         #pragma omp single
         {
-            #pragma omp task shared(a)
+            #pragma omp task shared(a) default(none)
             {
                 usleep(10 * 1000);
                 a = 11;
             }
-            #pragma omp task shared(b)
+            #pragma omp task shared(b) default(none)
             {
                 usleep(10 * 1000);
                 b = 22;
