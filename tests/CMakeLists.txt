@@ -357,6 +357,8 @@ xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_global.cc  taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_local.cc   taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_host.cc              taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_host_deps.cc         taskgraph)
+xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_ptr.cc     taskgraph)
+xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
 
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
