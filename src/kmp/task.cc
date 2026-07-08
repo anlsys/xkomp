@@ -3,6 +3,11 @@
 # include <xkomp/xkomp.h>
 # include <xkomp/kmp.h>
 
+/* Scatter helper emitted by clang for a leaf-form task: fills out[k] with the
+ * address of the task's k-th captured (frozen firstprivate) value. See
+ * emitTaskLeafScatter in clang's CGOpenMPRuntime.cpp. */
+typedef void (*kmp_task_scatter_t)(void * /* kmp_task_t * */, void ** /* out */);
+
 // task args
 typedef struct  task_args_t
 {
@@ -11,16 +16,30 @@ typedef struct  task_args_t
     /* The argument array handed to the outlined task routine
      * (kmp_routine_entry_t == void(*)(void**)); see kargs_from_task.
      *
-     * kargs[0] is the task's kmp_task_t* (== the kmp_task_t that immediately
-     * follows this struct). The compiler-emitted routine (the outlined
-     * `.omp_task_entry.`) reads it back as `args[0]` to recover the task and
-     * access its shareds/privates. A single stable pointer slot is all the
-     * routine consumes, which keeps it a valid CGIR PROG wrapper: prog-fuse
-     * copies kargs[0] verbatim, so a fused/relocated args buffer still yields
-     * the right task pointer. */
-    void * kargs[1];
+     * Two shapes, distinguished by the compiler-emitted routine:
+     *
+     *  - Leaf form (fusable): `kargs` holds one &value slot per captured
+     *    firstprivate scalar (kargs[k] == &value). The compiler emits the body
+     *    as a leaf kernel `void .omp_task_kernel.(v0, v1, ...)` plus a
+     *    void(void**) trampoline `.omp_task_entry.` that unpacks these slots and
+     *    calls it. Exposing each captured value as its own slot is what lets
+     *    prog-fuse deduplicate/align them across consecutive task bodies and
+     *    fuse their loops. The slots are filled once by the scatter helper (at
+     *    allocation) and point into the frozen privates area of THIS allocation,
+     *    so a recorded taskgraph replays correctly.
+     *
+     *  - Classic form: `kargs` holds a single slot, kargs[0] == the task's
+     *    kmp_task_t*; the routine (`.omp_task_entry.` proxy) reads it back to
+     *    recover shareds/privates. Used for tasks that are not leaf-eligible
+     *    (taskloops, target, shared/by-ref captures, ...).
+     *
+     * `kargs` points at storage reserved at the END of this task allocation
+     * (after the kmp_task_t + shareds), so this struct stays a fixed size and
+     * the kmp_task_t offset (see ktask_from_task) is independent of n_kargs. */
+    void ** kargs;
+    size_t  n_kargs;
 
-    // followed by the kmp task
+    // followed by the kmp task, its shareds, then the kargs slots
 }               task_args_t;
 
 /*
@@ -66,16 +85,12 @@ ktask_from_task(task_t * task)
 
 /*
  * Return the task's argument array: the `void ** args` passed to the outlined
- * task routine (kmp_routine_entry_t == void(*)(void**)).  args[0] is the task's
- * kmp_task_t*; the compiler-emitted routine reads it back to recover the task
- * and access its shareds/privates.  This is a valid CGIR PROG wrapper interface
- * (a program consuming a void** args block), so a recorded task body can be
- * fused by CGIR's prog-fuse pass.
- *
- * Design note: reaching captured data through `tt` (args[0]) — rather than
- * exposing each captured value as its own args slot — is what limits CGIR to
- * PROGRAM-level fusion of task bodies (no cross-task LOOP fusion). See the
- * recording site in body_omp_task() for details.
+ * task routine (kmp_routine_entry_t == void(*)(void**)).  For a leaf-form task
+ * the slots are the per-value &value pointers (args[k] == &value); for the
+ * classic form args[0] is the task's kmp_task_t*.  Either way this is a valid
+ * CGIR PROG launcher (a program consuming a void** args block), so a recorded
+ * task body can be fused by CGIR's prog-fuse pass -- and the leaf form's
+ * per-value slots let it fuse the bodies' LOOPS (see task_args_t).
  */
 static inline void **
 kargs_from_task(task_t * task)
@@ -86,7 +101,13 @@ kargs_from_task(task_t * task)
 }
 
 /* number of void* slots in the task's args array consumed by the routine */
-static constexpr size_t KARGS_NSLOTS = 1;
+static inline size_t
+kargs_nslots(task_t * task)
+{
+    task_args_t * args = (task_args_t *) TASK_ARGS(task);
+    assert(args);
+    return args->n_kargs;
+}
 
 static inline task_t *
 task_from_ktask(kmp_task_t * ktask)
@@ -164,15 +185,13 @@ body_omp_task(
          * program (rather than a fixed host callback that did the task-spawn)
          * is what lets CGIR fuse consecutive OpenMP task bodies (prog-fuse).
          *
-         * NOTE (loop fusion): the single recorded arg slot is the kmp_task_t*
-         * (args[0] == tt; see kargs_from_task). The body reaches its captured
-         * data indirectly through `tt` (shareds/privates), NOT as distinct
-         * per-value slots, so CGIR can fuse task bodies at the PROGRAM level
-         * (one wrapper calling each) but NOT at the LOOP level: each body keeps
-         * its own base pointers/offsets, which LLVM cannot align across bodies.
-         * TODO: to enable cross-task loop fusion, record the captured arrays and
-         * scalar offsets as separate deduplicable arg slots (leaf-kernel form)
-         * instead of the opaque args[0]==tt slice. */
+         * For a leaf-form task the recorded args are the per-value &value slots
+         * (n_kargs of them; see task_args_t), so prog-fuse can deduplicate/align
+         * the captured scalars across bodies and fuse their LOOPS. `fn` is the
+         * void(void**) trampoline (used for non-JIT replay); the serialized IR
+         * carries the leaf kernel that prog-fuse/jit actually fuse. For a classic
+         * task the single slot is the kmp_task_t* (args[0] == tt), and fusion
+         * stays at the PROGRAM level. */
         kmp_task_t * ktask = ktask_from_task(task);
         assert(ktask);
         assert(ktask->routine);
@@ -184,8 +203,8 @@ body_omp_task(
         new (&cmdrec->command) command_t(ctype, flags);
         cmdrec->command.prog.launch_mode                   = cgir::CGIR_COMMAND_PROG_LAUNCH_MODE_TASK_SPAWN;
         cmdrec->command.prog.launcher.variadic.fn          = ktask->routine;              // void(*)(void**)
-        cmdrec->command.prog.launcher.variadic.args        = kargs_from_task(task);       // void** (args[0] == tt)
-        cmdrec->command.prog.launcher.variadic.n_args      = KARGS_NSLOTS;
+        cmdrec->command.prog.launcher.variadic.args        = kargs_from_task(task);       // void** (&value slots, or [tt])
+        cmdrec->command.prog.launcher.variadic.n_args      = kargs_nslots(task);
         cmdrec->command.prog.launcher.variadic._args_owned = false;  // owned by the task's data environment
     }
 }
@@ -277,7 +296,9 @@ task_alloc(
     void * ir,
     size_t ir_size,
     void * ir_externs,
-    size_t ir_externs_count
+    size_t ir_externs_count,
+    size_t n_args,          // number of &value slots the routine consumes
+    void * scatter          // leaf scatter (kmp_task_scatter_t) or NULL (classic)
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -316,8 +337,14 @@ task_alloc(
     // externalized-global address table)
     const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count);
 
-    // see llvm impl
-    const size_t args_size = sizeof(task_args_t) + round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
+    // Layout of the args region (see task_args_t):
+    //   [task_args_t] [kmp_task_t + shareds (rounded)] [n_kargs void* slots]
+    // The kargs slots live at the end so task_args_t stays a fixed size (the
+    // kmp_task_t offset must not depend on n_args; see ktask_from_task). We
+    // reserve at least one slot so `kargs` never points past the allocation.
+    const size_t nslots = n_args ? n_args : 1;
+    const size_t kmp_block = round_up_to_val(sizeof_kmp_task_t + sizeof_shareds, sizeof(void *));
+    const size_t args_size = sizeof(task_args_t) + kmp_block + nslots * sizeof(void *);
     task_t * task = xkomp->runtime.task_new(fmtid, xkflags, NULL, args_size, naccesses);
     assert(task);
 
@@ -354,13 +381,29 @@ task_alloc(
     kmp_task_t * ktask = (kmp_task_t *) (args + 1);
     assert(ktask);
 
-    /* args[0] handed to the outlined routine is the task's kmp_task_t* (see
-     * kargs_from_task): the routine reads it back to recover shareds/privates. */
-    args->kargs[0] = (void *) ktask;
-
     ktask->shareds = (void *) (sizeof_shareds <= 0 ? 0 : ((uintptr_t) ktask) + sizeof_kmp_task_t);
     ktask->routine = task_entry;
     ktask->part_id = 0;
+
+    // the kargs slots sit just past the kmp_task_t + shareds block
+    args->kargs   = (void **) (((char *) ktask) + kmp_block);
+    args->n_kargs = n_args;
+
+    if (scatter)
+    {
+        /* Leaf form: let the compiler-emitted scatter fill kargs[k] with the
+         * address of the k-th captured value. It records only ADDRESSES (into
+         * this allocation's privates area), which are valid now even though the
+         * values are copied in later by the caller -- and stable for replay. */
+        ((kmp_task_scatter_t) scatter)(ktask, args->kargs);
+    }
+    else
+    {
+        /* Classic form: the single slot is the task's kmp_task_t* (args[0] ==
+         * tt); the routine reads it back to recover shareds/privates. */
+        assert(n_args == 1);
+        args->kargs[0] = (void *) ktask;
+    }
 
     # ifndef NDEBUG
     snprintf(task->label, sizeof(task->label), "omp-task");
@@ -383,10 +426,12 @@ __kmpc_omp_task_alloc_with_deps(
     void * ir,
     size_t ir_size,
     void * ir_externs,
-    size_t ir_externs_count
+    size_t ir_externs_count,
+    size_t n_args,
+    void * scatter
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
 }
 
 extern "C"
@@ -404,14 +449,16 @@ __kmpc_omp_target_task_alloc_with_deps(
     void * ir,
     size_t ir_size,
     void * ir_externs,
-    size_t ir_externs_count
+    size_t ir_externs_count,
+    size_t n_args,
+    void * scatter
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
 }
 
 // Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
@@ -439,7 +486,7 @@ __kmpc_omp_target_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -466,7 +513,7 @@ __kmpc_omp_task_alloc(
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
