@@ -23,7 +23,7 @@ test_war(void)
     {
         #pragma omp single
         {
-            #pragma omp task access(read: war_x[0:N]) default(none)
+            #pragma omp task access(read: war_x[0:N])
             {
                 long s = 0;
                 for (int i = 0 ; i < N ; ++i)
@@ -32,7 +32,7 @@ test_war(void)
             }
 
             // zeroes the region -> must run after the reader (write-after-read)
-            #pragma omp task access(write: war_x[0:N]) default(none)
+            #pragma omp task access(write: war_x[0:N])
             {
                 for (int i = 0 ; i < N ; ++i)
                     war_x[i] = 0;
@@ -58,10 +58,10 @@ test_waw(void)
     {
         #pragma omp single
         {
-            #pragma omp task access(write: waw_x[0:N]) default(none)
+            #pragma omp task access(write: waw_x[0:N])
             { for (int i = 0 ; i < N ; ++i) waw_x[i] = 1; }
 
-            #pragma omp task access(write: waw_x[0:N]) default(none)
+            #pragma omp task access(write: waw_x[0:N])
             { for (int i = 0 ; i < N ; ++i) waw_x[i] = 2; }   // after the first
 
             #pragma omp taskwait

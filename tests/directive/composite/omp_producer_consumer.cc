@@ -26,13 +26,13 @@ test_pipeline(void)
                 #pragma omp task depend(out: a[s]) firstprivate(s) shared(a) default(none)
                 a[s] = s;
 
-                #pragma omp task depend(in: a[s]) depend(out: b[s]) firstprivate(s) shared(a, b) default(none)
+                #pragma omp task depend(in: a[s]) depend(out: b[s]) firstprivate(s) shared(a, b, stderr) default(none)
                 {
                     CHECK_EQ(a[s], s);
                     b[s] = a[s] * 2;
                 }
 
-                #pragma omp task depend(in: b[s]) depend(out: c[s]) firstprivate(s) shared(b, c) default(none)
+                #pragma omp task depend(in: b[s]) depend(out: c[s]) firstprivate(s) shared(b, c, stderr) default(none)
                 {
                     CHECK_EQ(b[s], s * 2);
                     c[s] = b[s] + 1;

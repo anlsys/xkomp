@@ -27,7 +27,7 @@ test_access_basic(void)
         #pragma omp single
         {
             // producer: writes the whole region
-            #pragma omp task access(write: x[0:N]) default(none)
+            #pragma omp task access(write: x[0:N])
             {
                 for (int i = 0 ; i < N ; ++i)
                     x[i] = i;
@@ -35,14 +35,14 @@ test_access_basic(void)
 
             // consumer: reads one element -> ordered after the producer
             // (write -> read on intersecting storage)
-            #pragma omp task access(read: x[N/2]) default(none)
+            #pragma omp task access(read: x[N/2])
             {
                 CHECK_EQ(x[N/2], N/2);
             }
 
             // read+write over the whole region, non-coherent (synchronize only,
             // no coherence copy) -> ordered after both tasks above
-            #pragma omp task access(noncoherent, read, write: x[0:N]) default(none)
+            #pragma omp task access(noncoherent, read, write: x[0:N])
             {
                 CHECK_EQ(x[0], 0);
                 x[0] = 123;
