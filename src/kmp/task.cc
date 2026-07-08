@@ -13,25 +13,27 @@ typedef struct  task_args_t
 {
     task_t * task;
 
-    /* The argument array handed to the outlined task routine
-     * (kmp_routine_entry_t == void(*)(void**)); see kargs_from_task.
+    /* The argument array for the JIT/prog-fuse path only: it feeds the forwarded
+     * void(void**) kernel once the `jit` pass compiles it (recorded into a PROG
+     * command's `args`; see body_omp_task). The ahead-of-time routine
+     * `.omp_task_entry.(gtid, kmp_task_t*)` does NOT use `kargs` -- it recovers
+     * shareds/privates from the kmp_task_t. `kargs` has two shapes, matching the
+     * forwarded kernel the compiler emits:
      *
-     * Two shapes, distinguished by the compiler-emitted routine:
-     *
-     *  - Leaf form (fusable): `kargs` holds one &value slot per captured
+     *  - Unpacked form (fusable): `kargs` holds one &value slot per captured
      *    firstprivate scalar (kargs[k] == &value). The compiler emits the body
-     *    as a leaf kernel `void .omp_task_kernel.(v0, v1, ...)` plus a
-     *    void(void**) trampoline `.omp_task_entry.` that unpacks these slots and
-     *    calls it. Exposing each captured value as its own slot is what lets
-     *    prog-fuse deduplicate/align them across consecutive task bodies and
-     *    fuse their loops. The slots are filled once by the scatter helper (at
-     *    allocation) and point into the frozen privates area of THIS allocation,
-     *    so a recorded taskgraph replays correctly.
+     *    as an unpacked leaf kernel `void .omp_task_kernel.(v0, v1, ...)`.
+     *    Exposing each captured value as its own slot is what lets prog-fuse
+     *    deduplicate/align them across consecutive task bodies and fuse their
+     *    loops. The slots are filled once by the scatter helper (at allocation)
+     *    and point into the frozen privates area of THIS allocation, so a
+     *    recorded taskgraph replays correctly.
      *
-     *  - Classic form: `kargs` holds a single slot, kargs[0] == the task's
-     *    kmp_task_t*; the routine (`.omp_task_entry.` proxy) reads it back to
-     *    recover shareds/privates. Used for tasks that are not leaf-eligible
-     *    (taskloops, target, shared/by-ref captures, ...).
+     *  - Packed form: `kargs` holds a single slot, kargs[0] == the task's
+     *    kmp_task_t*; the packed kernel `void .omp_task_kernel.(void**)` reads it
+     *    back to recover shareds/privates. Used for tasks that are not
+     *    leaf-eligible (taskloops, target, shared/by-ref captures, ...); fusion
+     *    stays at the PROGRAM level.
      *
      * `kargs` points at storage reserved at the END of this task allocation
      * (after the kmp_task_t + shareds), so this struct stays a fixed size and
@@ -138,8 +140,10 @@ task_pad_accesses(task_t * task, access_t * accesses, kmp_int32 from, kmp_int32 
         new (accesses + i) access_t(task, ACCESS_MODE_V, ACCESS_CONCURRENCY_SEQUENTIAL, ACCESS_SCOPE_NONUNIFIED);
 }
 
-// Launch the routine associated with an openmp task. The routine matches the
-// CGIR PROG launcher interface `void func(void ** args)`; see kargs_from_task.
+// Run an OpenMP task body directly via its ahead-of-time libomp routine
+// `routine(gtid, kmp_task_t*)` (the compiler's `.omp_task_entry.` proxy). This is
+// the non-JIT execution path; the JIT/fusion path instead compiles the forwarded
+// void(void**) kernel and is launched by the runtime (see command_prog_run_host).
 static inline void
 body_omp_task_run(
     task_t * task
@@ -147,8 +151,9 @@ body_omp_task_run(
     kmp_task_t * ktask = ktask_from_task(task);
     assert(ktask);
     assert(ktask->routine);
-    void ** args = kargs_from_task(task);
-    ktask->routine(args);
+    thread_t * thread = thread_t::get_tls();
+    const kmp_int32 gtid = thread ? (kmp_int32) thread->gtid : 0;
+    ktask->routine(gtid, ktask);
 }
 
 // Called from a non-device thread
@@ -177,21 +182,23 @@ body_omp_task(
         task_rec_info_t * rec = TASK_REC_INFO(task);
         assert(rec);
 
-        /* Record a PROG command for replay. The program is the outlined task
-         * body itself (`void routine(void ** args)`) together with the task's
-         * args array; its launch mode is TASK_SPAWN, so on replay the runtime
-         * re-spawns a task (in the replaying thread's team) that runs the body
-         * and completes the command. Recording the body as a plain variadic
-         * program (rather than a fixed host callback that did the task-spawn)
-         * is what lets CGIR fuse consecutive OpenMP task bodies (prog-fuse).
+        /* Record a PROG command for replay. Its launch mode is TASK_SPAWN, so on
+         * replay the runtime re-spawns a task (in the replaying thread's team)
+         * that runs the body and completes the command.
          *
-         * For a leaf-form task the recorded args are the per-value &value slots
-         * (n_kargs of them; see task_args_t), so prog-fuse can deduplicate/align
-         * the captured scalars across bodies and fuse their LOOPS. `fn` is the
-         * void(void**) trampoline (used for non-JIT replay); the serialized IR
-         * carries the leaf kernel that prog-fuse/jit actually fuse. For a classic
-         * task the single slot is the kmp_task_t* (args[0] == tt), and fusion
-         * stays at the PROGRAM level. */
+         * The command is recorded on the KMP prototype: launcher.kmp is the task's
+         * ahead-of-time libomp routine `.omp_task_entry.(gtid, kmp_task_t*)`, run
+         * directly for non-JIT replay. We ALSO fill `args` (the recorded kargs)
+         * and the serialized IR (attached from the task format during graph build)
+         * so prog-fuse/jit can compile the forwarded void(void**) kernel: the
+         * `jit` pass then flips the prototype to VARIADIC. Keeping both coexisting
+         * is why `args` lives outside the launcher union.
+         *
+         * For an unpacked (leaf) task the recorded args are the per-value &value
+         * slots (n_kargs of them; see task_args_t), so prog-fuse can deduplicate/
+         * align the captured scalars across bodies and fuse their LOOPS. For a
+         * packed task the single slot is the kmp_task_t* (args[0] == tt), and
+         * fusion stays at the PROGRAM level. */
         kmp_task_t * ktask = ktask_from_task(task);
         assert(ktask);
         assert(ktask->routine);
@@ -201,11 +208,13 @@ body_omp_task(
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
         cmdrec->state = task->state.value;
         new (&cmdrec->command) command_t(ctype, flags);
-        cmdrec->command.prog.launch_mode                   = cgir::CGIR_COMMAND_PROG_LAUNCH_MODE_TASK_SPAWN;
-        cmdrec->command.prog.launcher.variadic.fn          = ktask->routine;              // void(*)(void**)
-        cmdrec->command.prog.launcher.variadic.args        = kargs_from_task(task);       // void** (&value slots, or [tt])
-        cmdrec->command.prog.launcher.variadic.n_args      = kargs_nslots(task);
-        cmdrec->command.prog.launcher.variadic._args_owned = false;  // owned by the task's data environment
+        cmdrec->command.prog.launch_mode        = cgir::CGIR_COMMAND_PROG_LAUNCH_MODE_TASK_SPAWN;
+        cmdrec->command.prog.prototype          = cgir::CGIR_COMMAND_PROG_FUNCTION_PROTOTYPE_KMP;
+        cmdrec->command.prog.launcher.kmp.fn    = (int (*)(int, void *)) ktask->routine;   // .omp_task_entry.(gtid, tt)
+        cmdrec->command.prog.launcher.kmp.task  = (void *) ktask;
+        cmdrec->command.prog.args               = kargs_from_task(task);   // void** (&value slots, or [tt]) for the JIT path
+        cmdrec->command.prog.n_args             = kargs_nslots(task);
+        cmdrec->command.prog._args_owned        = false;  // owned by the task's data environment
     }
 }
 
