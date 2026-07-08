@@ -3,9 +3,9 @@
 # include <xkomp/xkomp.h>
 # include <xkomp/kmp.h>
 
-/* Scatter helper emitted by clang for a leaf-form task: fills out[k] with the
+/* Scatter helper emitted by clang for an unpacked task: fills out[k] with the
  * address of the task's k-th captured (frozen firstprivate) value. See
- * emitTaskLeafScatter in clang's CGOpenMPRuntime.cpp. */
+ * emitTaskUnpackedScatter in clang's CGOpenMPRuntime.cpp. */
 typedef void (*kmp_task_scatter_t)(void * /* kmp_task_t * */, void ** /* out */);
 
 // task args
@@ -22,7 +22,7 @@ typedef struct  task_args_t
      *
      *  - Unpacked form (fusable): `kargs` holds one &value slot per captured
      *    firstprivate scalar (kargs[k] == &value). The compiler emits the body
-     *    as an unpacked leaf kernel `void .omp_task_kernel.(v0, v1, ...)`.
+     *    as an unpacked kernel `void .omp_task_kernel.(v0, v1, ...)`.
      *    Exposing each captured value as its own slot is what lets prog-fuse
      *    deduplicate/align them across consecutive task bodies and fuse their
      *    loops. The slots are filled once by the scatter helper (at allocation)
@@ -32,7 +32,7 @@ typedef struct  task_args_t
      *  - Packed form: `kargs` holds a single slot, kargs[0] == the task's
      *    kmp_task_t*; the packed kernel `void .omp_task_kernel.(void**)` reads it
      *    back to recover shareds/privates. Used for tasks that are not
-     *    leaf-eligible (taskloops, target, shared/by-ref captures, ...); fusion
+     *    unpacked-eligible (taskloops, target, shared/by-ref captures, ...); fusion
      *    stays at the PROGRAM level.
      *
      * `kargs` points at storage reserved at the END of this task allocation
@@ -86,13 +86,10 @@ ktask_from_task(task_t * task)
 }
 
 /*
- * Return the task's argument array: the `void ** args` passed to the outlined
- * task routine (kmp_routine_entry_t == void(*)(void**)).  For a leaf-form task
- * the slots are the per-value &value pointers (args[k] == &value); for the
- * classic form args[0] is the task's kmp_task_t*.  Either way this is a valid
- * CGIR PROG launcher (a program consuming a void** args block), so a recorded
- * task body can be fused by CGIR's prog-fuse pass -- and the leaf form's
- * per-value slots let it fuse the bodies' LOOPS (see task_args_t).
+ * Return the task's argument array (the `void ** args` for the JIT'd void(void**)
+ * kernel; see task_args_t). For an unpacked task the slots are the per-value
+ * &value pointers (args[k] == &value); for a packed task args[0] is the
+ * kmp_task_t*. The per-value slots are what let prog-fuse fuse the bodies' LOOPS.
  */
 static inline void **
 kargs_from_task(task_t * task)
@@ -194,7 +191,7 @@ body_omp_task(
          * `jit` pass then flips the prototype to VARIADIC. Keeping both coexisting
          * is why `args` lives outside the launcher union.
          *
-         * For an unpacked (leaf) task the recorded args are the per-value &value
+         * For an unpacked task the recorded args are the per-value &value
          * slots (n_kargs of them; see task_args_t), so prog-fuse can deduplicate/
          * align the captured scalars across bodies and fuse their LOOPS. For a
          * packed task the single slot is the kmp_task_t* (args[0] == tt), and
@@ -317,7 +314,7 @@ task_alloc(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,          // number of &value slots the routine consumes
-    void * scatter          // leaf scatter (kmp_task_scatter_t) or NULL (classic)
+    void * scatter          // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -410,7 +407,7 @@ task_alloc(
 
     if (scatter)
     {
-        /* Leaf form: let the compiler-emitted scatter fill kargs[k] with the
+        /* Unpacked form: let the compiler-emitted scatter fill kargs[k] with the
          * address of the k-th captured value. It records only ADDRESSES (into
          * this allocation's privates area), which are valid now even though the
          * values are copied in later by the caller -- and stable for replay. */
@@ -418,7 +415,7 @@ task_alloc(
     }
     else
     {
-        /* Classic form: the single slot is the task's kmp_task_t* (args[0] ==
+        /* Packed form: the single slot is the task's kmp_task_t* (args[0] ==
          * tt); the routine reads it back to recover shareds/privates. */
         assert(n_args == 1);
         args->kargs[0] = (void *) ktask;

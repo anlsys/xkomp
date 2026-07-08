@@ -105,7 +105,7 @@ typedef struct ident {
  *
  * For JIT / prog-fuse, the compiler ALSO forwards the body as a uniform
  * `void(void**)` program (a "packed" kernel reading args[0]==kmp_task_t*, or an
- * "unpacked" leaf kernel taking one deduplicable &value slot per captured
+ * "unpacked" kernel taking one deduplicable &value slot per captured
  * scalar) via the task format's LLVM-IR; see get_or_create_loc_format() and the
  * CGIR command prototypes (command_prog_function_prototype_t). The runtime picks
  * the KMP routine or the JIT'd void(void**) program at launch time.
