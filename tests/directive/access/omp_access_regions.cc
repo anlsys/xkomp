@@ -21,14 +21,14 @@ test_disjoint(void)
     {
         #pragma omp single
         {
-            #pragma omp task access(write: x[0:N/2]) default(none)
+            #pragma omp task access(write: x[0:N/2])
             { for (int i = 0   ; i < N/2 ; ++i) x[i] = i; }
 
-            #pragma omp task access(write: x[N/2:N/2]) default(none)
+            #pragma omp task access(write: x[N/2:N/2])
             { for (int i = N/2 ; i < N   ; ++i) x[i] = i; }
 
             // reads the whole region -> intersects both writers -> after both
-            #pragma omp task access(read: x[0:N]) default(none)
+            #pragma omp task access(read: x[0:N])
             { for (int i = 0 ; i < N ; ++i) CHECK_EQ(x[i], i); }
 
             #pragma omp taskwait
@@ -51,11 +51,11 @@ test_partial_overlap(void)
     {
         #pragma omp single
         {
-            #pragma omp task access(write: x[0 : 3*N/4]) default(none)
+            #pragma omp task access(write: x[0 : 3*N/4])
             { for (int i = 0 ; i < 3*N/4 ; ++i) x[i] = 1; }
 
             // [N/4 : 3N/4] spans [N/4, N); overlaps A on [N/4, 3N/4) -> B after A
-            #pragma omp task access(read, write: x[N/4 : 3*N/4]) default(none)
+            #pragma omp task access(read, write: x[N/4 : 3*N/4])
             { for (int i = N/4 ; i < N ; ++i) x[i] += 10; }
 
             #pragma omp taskwait

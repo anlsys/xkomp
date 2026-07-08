@@ -36,7 +36,7 @@ test_dag(void)
             for (int k = 0; k < W; ++k)
             {
                 #pragma omp task depend(in: src) depend(out: mid[k]) \
-                        firstprivate(k) shared(src, mid, mid_done) default(none)
+                        firstprivate(k) shared(src, mid, mid_done, stderr) default(none)
                 {
                     CHECK_EQ(src, 10);
                     mid[k] = src + k;
@@ -47,7 +47,7 @@ test_dag(void)
 
             // fan-in: depends on every middle token
             #pragma omp task depend(in: mid[0], mid[1], mid[2], mid[3]) \
-                    shared(mid, mid_done, sink) default(none)
+                    shared(mid, mid_done, sink, stderr) default(none)
             {
                 CHECK_EQ(mid_done, W);
                 int s = 0;

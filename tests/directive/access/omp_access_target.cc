@@ -31,7 +31,7 @@ main(void)
 
             // host task reads the whole array -> ordered after the device writer
             // (write -> read); the runtime copies the region back to the host
-            #pragma omp task access(read: x[0:N]) default(none)
+            #pragma omp task access(read: x[0:N])
             {
                 for (int i = 0 ; i < N ; ++i)
                     CHECK_EQ(x[i], i);

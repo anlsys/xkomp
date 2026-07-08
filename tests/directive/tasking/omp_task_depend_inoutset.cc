@@ -29,7 +29,7 @@ test_inoutset(void)
             // inoutset set: each runs after the producer; siblings may overlap
             for (int i = 0; i < M; ++i)
             {
-                #pragma omp task depend(inoutset: x) firstprivate(i) shared(produced, set_count) default(none)
+                #pragma omp task depend(inoutset: x) firstprivate(i) shared(produced, set_count, stderr) default(none)
                 {
                     CHECK_EQ(produced, 1);   // ordered after producer
                     #pragma omp atomic

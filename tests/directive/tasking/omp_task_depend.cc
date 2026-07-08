@@ -20,14 +20,14 @@ test_depend(void)
             int y = 0;
 
             // T1: produce x
-            #pragma omp task depend(out: x) shared(x) default(none)
+            #pragma omp task depend(out: x) shared(x, stderr) default(none)
             {
                 CHECK_EQ(x, 0);
                 x = 1;
             }
 
             // T2: read x, produce y   (must run after T1)
-            #pragma omp task depend(in: x) depend(out: y) shared(x, y) default(none)
+            #pragma omp task depend(in: x) depend(out: y) shared(x, y, stderr) default(none)
             {
                 CHECK_EQ(x, 1);
                 CHECK_EQ(y, 0);
@@ -35,7 +35,7 @@ test_depend(void)
             }
 
             // T3: update x, read y     (must run after T1 and T2)
-            #pragma omp task depend(out: x) depend(in: y) shared(x, y) default(none)
+            #pragma omp task depend(out: x) depend(in: y) shared(x, y, stderr) default(none)
             {
                 CHECK_EQ(x, 1);
                 CHECK_EQ(y, 2);
@@ -43,7 +43,7 @@ test_depend(void)
             }
 
             // T4: read final x         (must run after T3)
-            #pragma omp task depend(in: x) shared(x) default(none)
+            #pragma omp task depend(in: x) shared(x, stderr) default(none)
             {
                 CHECK_EQ(x, 3);
             }

@@ -44,7 +44,7 @@ test_data_sharing(void)
     {
         #pragma omp single
         {
-            #pragma omp task firstprivate(x) shared(y) default(none)
+            #pragma omp task firstprivate(x) shared(y, stderr) default(none)
             {
                 CHECK_EQ(x, 42);
                 y = x + 1;

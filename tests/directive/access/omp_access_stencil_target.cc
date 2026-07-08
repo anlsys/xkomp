@@ -113,7 +113,7 @@ main(void)
             }
 
             // write the final buffer back to the host initial-replica
-            #pragma omp task access(read: v[0:n]) default(none)
+            #pragma omp task access(read: v[0:n])
                 {}
 
             #pragma omp taskwait
