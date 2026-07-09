@@ -244,7 +244,10 @@ get_or_create_loc_format(
     void * ir,
     size_t ir_size,
     void * ir_externs,
-    size_t ir_externs_count
+    size_t ir_externs_count,
+    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
+    size_t ir_params_count, // number of entries in ir_params
+    void * scatter          // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
 ) {
     // no per-construct key at all: fall back to the shared template format
     if (loc_ref == NULL && (ir == NULL || ir_size == 0))
@@ -276,8 +279,8 @@ get_or_create_loc_format(
         else
             snprintf(format.label, sizeof(format.label), "omp-task");
 
-        // the IR (and its externalized-global address table) are compile-time
-        // globals, so `_owned`/`_externs_owned` are false
+        // the IR (and its externalized-global address / parameter tables) are
+        // compile-time globals, so `_owned`/`_externs_owned`/`_params_owned` are false
         if (ir != NULL && ir_size > 0)
         {
             cgir_command_prog_source_t * src = &format.source[XKRT_TASK_FORMAT_TARGET_HOST];
@@ -288,6 +291,15 @@ get_or_create_loc_format(
             src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) ir_externs;
             src->content.llvmir.externs_count  = ir_externs_count;
             src->content.llvmir._externs_owned = false;
+            // Parameter descriptors + entry prototype: an unpacked task body exposes
+            // one value parameter per capture (the fusion unit); a packed body has
+            // a single void** args block (args[0] == kmp_task_t*).
+            src->content.llvmir.proto          = scatter
+                ? CGIR_COMMAND_PROG_SOURCE_PROTO_UNPACKED_PARAMS
+                : CGIR_COMMAND_PROG_SOURCE_PROTO_VOID_PTRPTR;
+            src->content.llvmir.params         = (const cgir_command_prog_param_t *) ir_params;
+            src->content.llvmir.param_count    = ir_params_count;
+            src->content.llvmir._params_owned  = false;
         }
 
         fmtid = xkomp->runtime.task_format_create(&format);
@@ -314,7 +326,9 @@ task_alloc(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,          // number of &value slots the routine consumes
-    void * scatter          // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
+    void * scatter,         // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
+    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
+    size_t ir_params_count  // number of entries in ir_params
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -351,7 +365,7 @@ task_alloc(
 
     // resolve the per-source-location task format (carries the LLVM-IR + the
     // externalized-global address table)
-    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count);
+    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count, ir_params, ir_params_count, scatter);
 
     // Layout of the args region (see task_args_t):
     //   [task_args_t] [kmp_task_t + shareds (rounded)] [n_kargs void* slots]
@@ -444,10 +458,12 @@ __kmpc_omp_task_alloc_with_deps(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,
-    void * scatter
+    void * scatter,
+    void * ir_params,
+    size_t ir_params_count
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count);
 }
 
 extern "C"
@@ -467,14 +483,16 @@ __kmpc_omp_target_task_alloc_with_deps(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,
-    void * scatter
+    void * scatter,
+    void * ir_params,
+    size_t ir_params_count
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count);
 }
 
 // Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
@@ -502,7 +520,7 @@ __kmpc_omp_target_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL, /*ir_params=*/NULL, /*ir_params_count=*/0);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -529,7 +547,7 @@ __kmpc_omp_task_alloc(
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL, /*ir_params=*/NULL, /*ir_params_count=*/0);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
