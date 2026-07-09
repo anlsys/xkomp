@@ -2,8 +2,13 @@
 # define __XKOMP_H__
 
 # include <xkrt/runtime.h>
+# include <xkrt/data-structures/small-vector.h>
+# include <xkrt/sync/spinlock.h>
 # include <xkomp/support.h>
 # include <xkomp/taskgraph.h>
+
+# include <map>
+# include <unordered_map>
 
 /**
  * EXPORT_OMP_ABI(suffix)
@@ -37,7 +42,25 @@ typedef struct  xkomp_env_t
     int OMP_THREAD_LIMIT;
     const char * OMP_PLACES;
     const char * OMP_PROC_BIND;
+
+    /* set of cgir command-graph optimization passes applied to recorded
+     * taskgraphs (see OMP_TASKGRAPH_OPT in env.cc) */
+    cgir::command_graph_pass_set_t OMP_TASKGRAPH_OPT;
 }               xkomp_env_t;
+
+/* a persistent team cached for `# pragma omp parallel`, reused across regions
+ * that request the same number of threads */
+typedef struct  xkomp_team_entry_t
+{
+    int nthreads;
+    team_t team;
+}               xkomp_team_entry_t;
+
+/* max number of distinct thread counts cached at once. Teams are stored in-place
+ * in the small vector, so this is its inline capacity: growing beyond it would
+ * relocate the teams and dangle their worker threads. We never expect more than
+ * a couple of distinct thread counts. */
+# define XKOMP_MAX_CACHED_TEAMS 8
 
 /** global variable that holds the entire openmp context */
 typedef struct  xkomp_t
@@ -48,8 +71,16 @@ typedef struct  xkomp_t
     /* omp task format */
     struct {
         struct {
+            /* template format ('omp-task') whose per-target function pointers
+             * are copied into every per-source-location format */
             task_format_id_t host;
             task_format_id_t target_memcpy_async;
+
+            /* one task format per source location (ident_t * loc_ref), keyed by
+             * the loc_ref pointer (as void *), carrying its compiler-provided
+             * LLVM-IR */
+            std::unordered_map<void *, task_format_id_t> per_loc;
+            spinlock_t per_loc_lock;
         } kmp;
     } formats;
 
@@ -61,6 +92,13 @@ typedef struct  xkomp_t
      *  Parallel init/replay of the same taskgraph is not supported
      */
     std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t> taskgraphs;
+
+    /**
+     *  Persistent teams for `# pragma omp parallel`, cached by number of
+     *  threads and reused across regions to avoid respawning pthreads. The
+     *  teams live in-place inside the small vector (no heap allocation).
+     */
+    small_vector_t<xkomp_team_entry_t, XKOMP_MAX_CACHED_TEAMS> teams;
 
 }               xkomp_t;
 

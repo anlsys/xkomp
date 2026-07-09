@@ -87,7 +87,7 @@ __kmpc_fork_teams(
     thread_t * thread = thread_t::get_tls();
     assert(thread);
 
-    LOGGER_NOT_IMPLEMENTED();
+    LOGGER_FATAL("Not implemented - maybe you tried to target a device without a valid target archicture, that ended up running on the host? e.g. -fopenmp -fopenmp-offload-mandatory -fopenmp-targets=nvptx64 -Xopenmp-target=nvptx64 --offload-arch=sm_80");
     # if 0
     va_list ap;
     va_start(ap, microtask);

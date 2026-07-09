@@ -14,10 +14,13 @@ xkomp_get(void)
     {
         xkomp = (xkomp_t *) malloc(sizeof(xkomp_t));
         assert(xkomp);
+        new (&xkomp->formats.kmp.per_loc) std::unordered_map<void *, task_format_id_t>();
+        xkomp->formats.kmp.per_loc_lock = SPINLOCK_INITIALIZER;
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
         new (&xkomp->taskgraphs) std::map<xkomp_taskgraph_id_t, xkomp_taskgraph_t>();
+        new (&xkomp->teams) small_vector_t<xkomp_team_entry_t, XKOMP_MAX_CACHED_TEAMS>();
     }
 
     return xkomp;
@@ -75,7 +78,8 @@ xkomp_get_num_threads(void)
     thread_t * tls = thread_t::get_tls();
     assert(tls);
 
-    return tls->team->priv.nthreads;
+    // outside any parallel region (no team), the spec mandates returning 1
+    return tls->team ? tls->team->priv.nthreads : 1;
 }
 EXPORT_OMP_ABI(get_num_threads);
 
@@ -119,8 +123,16 @@ void __attribute__((destructor))
 __xkomp_teardown(void)
 {
     assert(xkomp);
+
+    // join the cached persistent teams (wakes + reaps their parked workers)
+    // before tearing down the runtime they may still touch
+    for (xkomp_team_entry_t & entry : xkomp->teams)
+        xkomp->runtime.team_join(&entry.team);
+    xkomp->teams.~small_vector_t();
+
     xkomp->runtime.deinit();
     xkomp->taskgraphs.~map();
+    xkomp->formats.kmp.per_loc.~unordered_map();
     free(xkomp);
     xkomp = NULL;
 }
