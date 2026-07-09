@@ -131,7 +131,7 @@ body_omp_target_memcpy_async(
     xkomp_target_memcpy_args_t * args = (xkomp_target_memcpy_args_t *) TASK_ARGS(task);
     assert(args);
 
-    ocg::command_type_t ctype;
+    cgir::command_type_t ctype;
     command_queue_type_t qtype;
     device_t::offloader_command_types(
         args->size,
