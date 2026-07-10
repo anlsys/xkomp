@@ -529,7 +529,12 @@ __kmpc_omp_target_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL, /*ir_params=*/NULL, /*ir_params_count=*/0, /*jit_proto=*/0);
+    constexpr size_t n_args = 1;
+    constexpr void * scatter = NULL;
+    constexpr void * ir_params = NULL;
+    constexpr size_t ir_params_count = 0;
+    constexpr int jit_proto = 0;
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -555,8 +560,13 @@ __kmpc_omp_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
+    constexpr size_t n_args = 1;
+    constexpr void * scatter = NULL;
+    constexpr void * ir_params = NULL;
+    constexpr size_t ir_params_count = 0;
+    constexpr int jit_proto = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL, /*ir_params=*/NULL, /*ir_params_count=*/0, /*jit_proto=*/0);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
