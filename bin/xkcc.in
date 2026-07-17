@@ -1,0 +1,2 @@
+#!/bin/sh
+exec clang "$@" -L"@CMAKE_INSTALL_PREFIX@/lib" -lxkomp

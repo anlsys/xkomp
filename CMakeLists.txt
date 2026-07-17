@@ -186,6 +186,12 @@ install(FILES
     DESTINATION lib/cmake/XKOMP
 )
 
+# Installation - xkcc
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/xkcc.in  ${CMAKE_CURRENT_BINARY_DIR}/xkcc  @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/xkcxx.in ${CMAKE_CURRENT_BINARY_DIR}/xkcxx @ONLY)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/xkcc  DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/xkcxx DESTINATION bin)
+
 ################
 # Sub projects #
 ################
