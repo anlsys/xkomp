@@ -1,7 +1,7 @@
 # XKOMP
 An experimental OpenMP runtime-library implementation built on top of the XKaapi runtime system, and an extended LLVM's Clang ABI.
 
-# Prerequisities
+# Installation
 You must have an installation of
 - [XKRT](https://github.com/rpereira-dev/xkrt)
 - [patched LLVM](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
@@ -18,8 +18,10 @@ cmake -DCMAKE_BUILD_TYPE=Debug ../
 
 Example of application build
 ```
-clang -fopenmp main.c -o main -lxkomp
+xkcc main.c -o main
 ```
+
+
 
 # Bits of history
 XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)
