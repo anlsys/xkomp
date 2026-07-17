@@ -4,7 +4,7 @@ An experimental OpenMP runtime-library implementation built on top of the XKaapi
 # Installation
 You must have an installation of
 - [XKRT](https://github.com/rpereira-dev/xkrt)
-- [patched LLVM](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
+- [LLVM(ANL)](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
 
 Example of LLVM build
 ```
