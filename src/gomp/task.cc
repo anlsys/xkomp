@@ -1,4 +1,4 @@
-# include <xkomp/omp.h>
+# include <omp.h>
 # include <xkomp/xkomp.h>
 
 extern "C"
