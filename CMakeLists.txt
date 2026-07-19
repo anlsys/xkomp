@@ -195,5 +195,7 @@ install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/xkcxx DESTINATION bin)
 ################
 # Sub projects #
 ################
-add_subdirectory(tests/)
-enable_testing()
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_subdirectory(tests/)
+    enable_testing()
+endif()

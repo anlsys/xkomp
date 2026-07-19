@@ -41,7 +41,7 @@ project(tests CXX)
 if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(FATAL_ERROR
         "The XKOMP test-suite checks correctness with assert(), so it must be "
-        "configured in Debug mode.\nRe-run cmake with -DCMAKE_BUILD_TYPE=Debug.")
+        "configured in Debug mode.\nRe-run cmake with -DCMAKE_BUILD_TYPE=Debug or disable tests.")
 endif()
 
 find_package(HWLOC REQUIRED)
