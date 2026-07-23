@@ -41,6 +41,8 @@ VERSION {
         __kmpc_end_single;
         __kmpc_master;
         __kmpc_end_master;
+        __kmpc_masked;
+        __kmpc_end_masked;
         __kmpc_fork_teams;
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;

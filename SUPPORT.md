@@ -12,6 +12,8 @@ One should refer to the implementation itself to determine actual support of a s
 | ✅ | `taskwait` construct | Including nowait and depend clauses |
 | ✅ | Data-sharing (`firstprivate`, `private`, `shared`, etc.) | Mostly managed by base compilers |
 | ✅ | `barrier` construct | |
+| ✅ | `master` / `masked` constructs | `masked` supports the `filter` clause |
+| ⚠️ | `single` construct | Including `nowait`; missing `copyprivate` |
 | ✅ | `omp_get_thread_num`, `omp_get_num_threads`, `omp_get_max_threads` | |
 | ✅ | `omp_get_default_device`, `omp_get_num_devices`, `omp_get_initial_device`, `omp_get_device_num`, `omp_is_initial_device` | |
 | ✅ | `omp_get_wtime` | |

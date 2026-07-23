@@ -307,7 +307,7 @@ xkomp_add_xfail_test(directive/worksharing/single/omp_single_copyprivate.cc work
 
 # --- master / masked --------------------------------------------------------
 xkomp_add_test(directive/master/omp_master.cc                   master)
-xkomp_add_xfail_test(directive/masked/omp_masked.cc             masked)
+xkomp_add_test(directive/masked/omp_masked.cc                  masked)
 
 # --- barrier / atomic / critical --------------------------------------------
 xkomp_add_test(directive/barrier/omp_barrier.cc                 barrier)
