@@ -18,7 +18,7 @@ One should refer to the implementation itself to determine actual support of a s
 | ✅ | `OMP_NUM_THREADS`, `OMP_THREAD_LIMIT` | |
 | ✅ | `OMP_DISPLAY_ENV` | |
 | 🧪 | `taskgraph` construct | The `nogroup` clause is not supported efficiently |
-| ⚠️ | `task` construct | Missing the `transparent` clause |
+| ⚠️ | `task` construct | Supports `if` (undeferred `if(0)`), `depend`, `final`-agnostic; missing the `transparent` clause |
 | ⚠️ | `parallel` construct | `num_threads` clause is supported |
 | ⚠️ | `for` construct | Only supporting static schedule |
 | ⚠️ | `parallel for` combined-construct | Can be improved by caching XKRT teams rather than forking new |

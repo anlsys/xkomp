@@ -605,6 +605,32 @@ __kmpc_omp_task(
     return 0;
 }
 
+// Undeferred task (`#pragma omp task if(0)`). The task is submitted through the
+// NORMAL path (committed between these two calls -- see emitTaskCall in the
+// patched clang: begin_if0 / __kmpc_omp_task[_with_deps_v2] / complete_if0), so
+// any thread may execute it. `begin_if0` only marks it undeferred; `complete_if0`
+// suspends the encountering thread (work-stealing meanwhile) until that specific
+// task completed -- which is all `if(0)` requires. This is orthogonal to
+// taskgroups and dependences (both handled by the normal commit path).
+extern "C"
+void
+__kmpc_omp_task_begin_if0(ident_t * loc_ref, kmp_int32 gtid, kmp_task_t * ktask)
+{
+    (void) loc_ref; (void) gtid;
+    task_t * task = task_from_ktask(ktask);
+    task->flags |= TASK_FLAG_UNDEFERABLE;
+}
+
+extern "C"
+void
+__kmpc_omp_task_complete_if0(ident_t * loc_ref, kmp_int32 gtid, kmp_task_t * ktask)
+{
+    (void) loc_ref; (void) gtid;
+    task_t * task = task_from_ktask(ktask);
+    xkomp_t * xkomp = xkomp_get();
+    xkomp->runtime.task_wait(task);
+}
+
 extern "C"
 void
 __kmp_omp_task_acs_to_xkomp_accesses(
@@ -805,6 +831,67 @@ void
 __kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
         kmp_depend_info_t *dep_list, kmp_int32 ndeps_noalias,
         kmp_depend_info_t *noalias_dep_list) {
+}
+
+// Wait until a set of dependences is satisfied, WITHOUT running a user task body
+// (emitted by the compiler for `#pragma omp taskwait depend(...)`).
+//
+// We realize it as an EMPTY undeferred task carrying exactly those dependences:
+// committed on the normal path, it becomes ready only once its predecessors (the
+// tasks those deps refer to) have completed, and we then block on that specific
+// task -- so this waits for precisely those dependences (work-stealing
+// meanwhile, no over-synchronization).
+static void
+xkomp_taskwait_deps(
+    kmp_int32 ndeps,          kmp_depend_info_t * dep_list,
+    kmp_int32 ndeps_noalias,  kmp_depend_info_t * noalias_dep_list,
+    kmp_int32 nacs,           kmp_access_info_t * acs_list
+) {
+    const kmp_int32 naccesses = ndeps + ndeps_noalias + nacs;
+    if (naccesses == 0)
+        return;
+
+    xkomp_t * xkomp = xkomp_get();
+    assert(xkomp);
+
+    task_t * task = xkomp->runtime.task_instanciate<TASK_FLAG_ACCESSES>(
+        XKRT_UNSPECIFIED_DEVICE_UNIQUE_ID,
+        (task_access_counter_t) naccesses,
+        // fill the empty task's accesses from the depend/access clauses
+        [=](task_t * t, access_t * accesses) {
+            __kmp_omp_task_acs_to_xkomp_accesses (t, accesses,                    acs_list,         nacs);
+            __kmp_omp_task_deps_to_xkomp_accesses(t, accesses + nacs,             dep_list,         ndeps);
+            __kmp_omp_task_deps_to_xkomp_accesses(t, accesses + nacs + ndeps,     noalias_dep_list, ndeps_noalias);
+        },
+        // not moldable
+        nullptr,
+        // empty body: nothing to do, it exists only to carry the dependences
+        [](runtime_t *, device_t *, task_t *) { }
+    );
+
+    xkomp->runtime.task_commit(task);
+    xkomp->runtime.task_wait(task);
+}
+
+extern "C"
+void
+__kmpc_omp_taskwait_deps_51(ident_t * loc_ref, kmp_int32 gtid,
+        kmp_int32 ndeps, kmp_depend_info_t * dep_list,
+        kmp_int32 ndeps_noalias, kmp_depend_info_t * noalias_dep_list,
+        kmp_int32 has_no_wait) {
+    (void) loc_ref; (void) gtid; (void) has_no_wait;
+    xkomp_taskwait_deps(ndeps, dep_list, ndeps_noalias, noalias_dep_list, 0, NULL);
+}
+
+extern "C"
+void
+__kmpc_omp_taskwait_deps_51_v2(ident_t * loc_ref, kmp_int32 gtid,
+        kmp_int32 ndeps, kmp_depend_info_t * dep_list,
+        kmp_int32 ndeps_noalias, kmp_depend_info_t * noalias_dep_list,
+        kmp_int32 has_no_wait,
+        kmp_int32 nacs, kmp_access_info_t * acs_list) {
+    (void) loc_ref; (void) gtid; (void) has_no_wait;
+    xkomp_taskwait_deps(ndeps, dep_list, ndeps_noalias, noalias_dep_list, nacs, acs_list);
 }
 
 void
