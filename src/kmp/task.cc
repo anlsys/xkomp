@@ -818,3 +818,31 @@ xkomp_task_register_formats_kmp_task(xkomp_t * xkomp)
     snprintf(format.label, sizeof(format.label), "omp-task");
     xkomp->formats.kmp.host = xkomp->runtime.task_format_create(&format);
 }
+
+extern "C"
+kmp_int32
+__kmpc_omp_taskyield(ident_t *loc_ref, kmp_int32 gtid, int end_part)
+{
+    static bool warned = false;
+    if (!warned) { LOGGER_WARN("taskyield is currently a noop");  warned = true; }
+    return 0;
+}
+
+extern "C"
+void
+__kmpc_taskgroup(ident_t *loc, int gtid)
+{
+    static bool warned = false;
+    if (!warned) { LOGGER_WARN("taskgroup(begin) is currently a noop");  warned = true; }
+}
+
+extern "C"
+void
+__kmpc_end_taskgroup(ident_t *loc, int gtid)
+{
+    static bool warned = false;
+    if (!warned) { LOGGER_WARN("taskgroup(end) is currently a taskwait");  warned = true; }
+
+    xkomp_t * xkomp = xkomp_get();
+    xkomp->runtime.task_wait();
+}
