@@ -21,7 +21,8 @@ Example of application build
 xkcc main.c -o main
 ```
 
-
+# Remarks
+- Use `-fopenmp-task-jit-type=[pointers|packed]` to change how the llvm-ir of tasks is forwarded by clang to xkomp. With `pointers`, all arguments (firstprivate, shared, etc.) are stored in a `void ** args` array, referenced within the outlined region. With `packed`, they are packed in a `void * args, size_t size` compact structure.
 
 # Bits of history
 XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)
