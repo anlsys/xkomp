@@ -28,7 +28,7 @@ One should refer to the implementation itself to determine actual support of a s
 | ❌ | `OMP_SCHEDULE` | |
 | ❌ | `OMP_DISPLAY_AFFINITY` | |
 | ❌ | `taskloop` | |
-| ❌ | `taskgroup` | |
+| ✅ | `taskgroup` | Deep-sync of the task subtree (XKRT-native); `task_reduction`/`allocate` clauses and `cancel` not yet supported |
 | ❌ | Allocators | |
 | ❌ | OMPT | |
 | ❌ | OMPD | |

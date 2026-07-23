@@ -326,7 +326,7 @@ xkomp_add_test(directive/tasking/omp_task_nested.cc            tasking)
 xkomp_add_test(directive/tasking/omp_parallel_tasks.cc         tasking)
 xkomp_add_test(directive/tasking/omp_task_untied.cc            tasking)
 xkomp_add_xfail_test(directive/tasking/omp_taskyield.cc        tasking)
-xkomp_add_xfail_test(directive/tasking/omp_taskgroup.cc        tasking)
+xkomp_add_test(directive/tasking/omp_taskgroup.cc             tasking)
 xkomp_add_xfail_test(directive/tasking/omp_task_if.cc          tasking)
 
 # --- teams (host) -- not implemented ----------------------------------------
