@@ -19,6 +19,10 @@ VERSION {
         __kmpc_omp_task_alloc;
         __kmpc_omp_task_alloc_with_deps;
         __kmpc_omp_taskyield;
+        __kmpc_omp_task_begin_if0;
+        __kmpc_omp_task_complete_if0;
+        __kmpc_omp_taskwait_deps_51;
+        __kmpc_omp_taskwait_deps_51_v2;
         __kmpc_taskgroup;
         __kmpc_end_taskgroup;
         __kmpc_omp_target_task_alloc;

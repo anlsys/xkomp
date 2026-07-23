@@ -619,6 +619,8 @@ __kmpc_omp_task_begin_if0(ident_t * loc_ref, kmp_int32 gtid, kmp_task_t * ktask)
     (void) loc_ref; (void) gtid;
     task_t * task = task_from_ktask(ktask);
     task->flags |= TASK_FLAG_UNDEFERABLE;
+
+    __kmpc_omp_task(loc_ref, gtid, ktask);
 }
 
 extern "C"
