@@ -18,6 +18,11 @@ VERSION {
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
         __kmpc_omp_task_alloc_with_deps;
+        __kmpc_omp_taskyield;
+        __kmpc_omp_taskwait_deps_51;
+        __kmpc_omp_taskwait_deps_51_v2;
+        __kmpc_taskgroup;
+        __kmpc_end_taskgroup;
         __kmpc_omp_target_task_alloc;
         __kmpc_omp_target_task_alloc_with_deps;
         __kmpc_omp_task;
@@ -36,6 +41,8 @@ VERSION {
         __kmpc_end_single;
         __kmpc_master;
         __kmpc_end_master;
+        __kmpc_masked;
+        __kmpc_end_masked;
         __kmpc_fork_teams;
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;

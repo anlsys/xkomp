@@ -222,7 +222,9 @@ typedef struct kmp_tasking_flags { /* Total struct must be exactly 32 bits */
                                       setting for the task */
   unsigned detachable : 1;         /* 1 == can detach */
   unsigned hidden_helper : 1;      /* 1 == hidden helper task */
-  unsigned reserved : 8;           /* reserved for compiler use */
+  unsigned reserved8 : 1;          /* bit 8 (transparent, compiler-managed) */
+  unsigned undeferred : 1;         /* bit 9 == 1 if the task is undeferred (XKOMP: `if(0)`) */
+  unsigned reserved : 6;           /* reserved for compiler use */
 
   /* Library flags */       /* Total library flags must be 16 bits */
   unsigned tasktype : 1;    /* task is either explicit(1) or implicit (0) */

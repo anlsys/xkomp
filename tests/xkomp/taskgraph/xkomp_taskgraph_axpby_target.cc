@@ -78,7 +78,7 @@ main(void)
                 constexpr xkomp_taskgraph_id_t    gid   = 0;
                 constexpr xkomp_taskgraph_flags_t flags = XKOMP_TASKGRAPH_FLAG_NONE;
 
-                // pragma_omp_taskgraph(gid, flags, [&] (void)
+                pragma_omp_taskgraph(gid, flags, [&] (void)
                 {
                     for (int d = 0; d < ndevices; ++d)
                     {
@@ -102,7 +102,7 @@ main(void)
                         #pragma omp target update from(y[j:BS]) device(d) depend(out: deps[d]) nowait
                     }
                 }
-                //);
+                );
             }
 
             for (int d = 0; d < ndevices; ++d)

@@ -244,7 +244,11 @@ get_or_create_loc_format(
     void * ir,
     size_t ir_size,
     void * ir_externs,
-    size_t ir_externs_count
+    size_t ir_externs_count,
+    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
+    size_t ir_params_count, // number of entries in ir_params
+    void * scatter,         // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
+    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer (-fopenmp-task-jit-type)
 ) {
     // no per-construct key at all: fall back to the shared template format
     if (loc_ref == NULL && (ir == NULL || ir_size == 0))
@@ -276,8 +280,8 @@ get_or_create_loc_format(
         else
             snprintf(format.label, sizeof(format.label), "omp-task");
 
-        // the IR (and its externalized-global address table) are compile-time
-        // globals, so `_owned`/`_externs_owned` are false
+        // the IR (and its externalized-global address / parameter tables) are
+        // compile-time globals, so `_owned`/`_externs_owned`/`_params_owned` are false
         if (ir != NULL && ir_size > 0)
         {
             cgir_command_prog_source_t * src = &format.source[XKRT_TASK_FORMAT_TARGET_HOST];
@@ -288,6 +292,20 @@ get_or_create_loc_format(
             src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) ir_externs;
             src->content.llvmir.externs_count  = ir_externs_count;
             src->content.llvmir._externs_owned = false;
+            // Parameter descriptors + entry prototype: an unpacked task body exposes
+            // one value parameter per capture (the fusion unit); a packed body has
+            // a single void** args block (args[0] == kmp_task_t*).
+            // -fopenmp-task-jit-type=packed (jit_proto==2) requests a packed-buffer
+            // fused program; otherwise an unpacked (individual-param) body has a
+            // scatter, and a packed-args-block (args[0]==tt) proxy has none.
+            src->content.llvmir.proto          =
+                (jit_proto == (int) CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER)
+                    ? CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER
+                : scatter ? CGIR_COMMAND_PROG_SOURCE_PROTO_UNPACKED_PARAMS
+                          : CGIR_COMMAND_PROG_SOURCE_PROTO_VOID_PTRPTR;
+            src->content.llvmir.params         = (const cgir_command_prog_param_t *) ir_params;
+            src->content.llvmir.param_count    = ir_params_count;
+            src->content.llvmir._params_owned  = false;
         }
 
         fmtid = xkomp->runtime.task_format_create(&format);
@@ -314,7 +332,10 @@ task_alloc(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,          // number of &value slots the routine consumes
-    void * scatter          // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
+    void * scatter,         // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
+    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
+    size_t ir_params_count, // number of entries in ir_params
+    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -346,12 +367,19 @@ task_alloc(
         xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit commands
     }
 
+    // undeferred task (OpenMP `if(0)`): the compiler set this bit at creation.
+    // The task is still committed/scheduled normally (any thread may run it); the
+    // encountering thread just suspends until it completes (see task_wait(task)
+    // in __kmpc_omp_task / __kmpc_omp_task_with_deps_v2).
+    if (flags.undeferred)
+        xkflags |= TASK_FLAG_UNDEFERABLE;
+
     // if recording flag is set on parent, record that task.
     // TODO: if the `replayable(false)` is set, do not record
 
     // resolve the per-source-location task format (carries the LLVM-IR + the
     // externalized-global address table)
-    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count);
+    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count, ir_params, ir_params_count, scatter, jit_proto);
 
     // Layout of the args region (see task_args_t):
     //   [task_args_t] [kmp_task_t + shareds (rounded)] [n_kargs void* slots]
@@ -444,10 +472,13 @@ __kmpc_omp_task_alloc_with_deps(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,
-    void * scatter
+    void * scatter,
+    void * ir_params,
+    size_t ir_params_count,
+    int    jit_proto
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
 }
 
 extern "C"
@@ -467,14 +498,17 @@ __kmpc_omp_target_task_alloc_with_deps(
     void * ir_externs,
     size_t ir_externs_count,
     size_t n_args,
-    void * scatter
+    void * scatter,
+    void * ir_params,
+    size_t ir_params_count,
+    int    jit_proto
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
 }
 
 // Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
@@ -502,7 +536,12 @@ __kmpc_omp_target_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
+    constexpr size_t n_args = 1;
+    constexpr void * scatter = NULL;
+    constexpr void * ir_params = NULL;
+    constexpr size_t ir_params_count = 0;
+    constexpr int jit_proto = 0;
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -528,8 +567,13 @@ __kmpc_omp_task_alloc(
     constexpr size_t ir_size = 0;
     constexpr void * ir_externs = NULL;
     constexpr size_t ir_externs_count = 0;
+    constexpr size_t n_args = 1;
+    constexpr void * scatter = NULL;
+    constexpr void * ir_params = NULL;
+    constexpr size_t ir_params_count = 0;
+    constexpr int jit_proto = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, /*n_args=*/1, /*scatter=*/NULL);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -565,8 +609,21 @@ __kmpc_omp_task(
     // inert accesses at allocation time, so it can be committed as-is.
     xkomp->runtime.task_commit(task);
 
+    // undeferred task (`if(0)`): suspend the encountering thread until it
+    // completes. The task went through the normal scheduling path above, so any
+    // thread of the team may execute it meanwhile.
+    if (task->flags & TASK_FLAG_UNDEFERABLE)
+        xkomp->runtime.task_wait(task);
+
     return 0;
 }
+
+// NOTE: OpenMP `if(0)` (undeferred tasks) are NOT lowered through
+// __kmpc_omp_task_begin_if0 / __kmpc_omp_task_complete_if0 anymore. The patched
+// clang instead sets an `undeferred` bit in kmp_tasking_flags at creation and
+// submits the task on the normal path; the runtime suspends the encountering
+// thread after committing it (see task_alloc + the TASK_FLAG_UNDEFERABLE checks
+// in __kmpc_omp_task / __kmpc_omp_task_with_deps_v2).
 
 extern "C"
 void
@@ -731,6 +788,13 @@ __kmpc_omp_task_with_deps_v2(
 
     xkomp->runtime.task_commit(task);
 
+    // undeferred task (`if(0)` with a depend clause): suspend the encountering
+    // thread until it completes. It carries its own dependences and was committed
+    // on the normal path, so it is ordered after its predecessors and any thread
+    // may execute it -- no separate empty task / taskwait_deps is needed.
+    if (task->flags & TASK_FLAG_UNDEFERABLE)
+        xkomp->runtime.task_wait(task);
+
     # define TASK_CURRENT_NOT_QUEUED    0
     # define TASK_CURRENT_QUEUED        1
     return TASK_CURRENT_QUEUED;
@@ -770,6 +834,67 @@ __kmpc_omp_wait_deps(ident_t *loc_ref, kmp_int32 gtid, kmp_int32 ndeps,
         kmp_depend_info_t *noalias_dep_list) {
 }
 
+// Wait until a set of dependences is satisfied, WITHOUT running a user task body
+// (emitted by the compiler for `#pragma omp taskwait depend(...)`).
+//
+// We realize it as an EMPTY undeferred task carrying exactly those dependences:
+// committed on the normal path, it becomes ready only once its predecessors (the
+// tasks those deps refer to) have completed, and we then block on that specific
+// task -- so this waits for precisely those dependences (work-stealing
+// meanwhile, no over-synchronization).
+static void
+xkomp_taskwait_deps(
+    kmp_int32 ndeps,          kmp_depend_info_t * dep_list,
+    kmp_int32 ndeps_noalias,  kmp_depend_info_t * noalias_dep_list,
+    kmp_int32 nacs,           kmp_access_info_t * acs_list
+) {
+    const kmp_int32 naccesses = ndeps + ndeps_noalias + nacs;
+    if (naccesses == 0)
+        return;
+
+    xkomp_t * xkomp = xkomp_get();
+    assert(xkomp);
+
+    task_t * task = xkomp->runtime.task_instanciate<TASK_FLAG_ACCESSES>(
+        XKRT_UNSPECIFIED_DEVICE_UNIQUE_ID,
+        (task_access_counter_t) naccesses,
+        // fill the empty task's accesses from the depend/access clauses
+        [=](task_t * t, access_t * accesses) {
+            __kmp_omp_task_acs_to_xkomp_accesses (t, accesses,                    acs_list,         nacs);
+            __kmp_omp_task_deps_to_xkomp_accesses(t, accesses + nacs,             dep_list,         ndeps);
+            __kmp_omp_task_deps_to_xkomp_accesses(t, accesses + nacs + ndeps,     noalias_dep_list, ndeps_noalias);
+        },
+        // not moldable
+        nullptr,
+        // empty body: nothing to do, it exists only to carry the dependences
+        [](runtime_t *, device_t *, task_t *) { }
+    );
+
+    xkomp->runtime.task_commit(task);
+    xkomp->runtime.task_wait(task);
+}
+
+extern "C"
+void
+__kmpc_omp_taskwait_deps_51(ident_t * loc_ref, kmp_int32 gtid,
+        kmp_int32 ndeps, kmp_depend_info_t * dep_list,
+        kmp_int32 ndeps_noalias, kmp_depend_info_t * noalias_dep_list,
+        kmp_int32 has_no_wait) {
+    (void) loc_ref; (void) gtid; (void) has_no_wait;
+    xkomp_taskwait_deps(ndeps, dep_list, ndeps_noalias, noalias_dep_list, 0, NULL);
+}
+
+extern "C"
+void
+__kmpc_omp_taskwait_deps_51_v2(ident_t * loc_ref, kmp_int32 gtid,
+        kmp_int32 ndeps, kmp_depend_info_t * dep_list,
+        kmp_int32 ndeps_noalias, kmp_depend_info_t * noalias_dep_list,
+        kmp_int32 has_no_wait,
+        kmp_int32 nacs, kmp_access_info_t * acs_list) {
+    (void) loc_ref; (void) gtid; (void) has_no_wait;
+    xkomp_taskwait_deps(ndeps, dep_list, ndeps_noalias, noalias_dep_list, nacs, acs_list);
+}
+
 void
 xkomp_task_register_formats_kmp_task(xkomp_t * xkomp)
 {
@@ -780,4 +905,38 @@ xkomp_task_register_formats_kmp_task(xkomp_t * xkomp)
     format.f[XKRT_TASK_FORMAT_TARGET_HOST] = (task_format_func_t) body_omp_task;
     snprintf(format.label, sizeof(format.label), "omp-task");
     xkomp->formats.kmp.host = xkomp->runtime.task_format_create(&format);
+}
+
+extern "C"
+kmp_int32
+__kmpc_omp_taskyield(ident_t *loc_ref, kmp_int32 gtid, int end_part)
+{
+    static bool warned = false;
+    if (!warned) { LOGGER_WARN("taskyield is currently a noop");  warned = true; }
+    // TODO: implement taskyield in XKRT, and tiedness
+    return 0;
+}
+
+// Open a taskgroup region. XKRT binds every task created from now on (and all
+// their descendants, across workers) to this group, and counts them; see
+// runtime_t::taskgroup_begin.
+extern "C"
+void
+__kmpc_taskgroup(ident_t *loc, int gtid)
+{
+    (void) loc; (void) gtid;
+    xkomp_t * xkomp = xkomp_get();
+    xkomp->runtime.taskgroup_begin();
+}
+
+// Close a taskgroup region: deep-sync on the group (child tasks AND all their
+// descendants), not a plain taskwait. Decrement happens at true task completion
+// in XKRT, so device/detachable tasks are waited for correctly too.
+extern "C"
+void
+__kmpc_end_taskgroup(ident_t *loc, int gtid)
+{
+    (void) loc; (void) gtid;
+    xkomp_t * xkomp = xkomp_get();
+    xkomp->runtime.taskgroup_end();
 }

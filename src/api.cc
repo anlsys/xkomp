@@ -113,10 +113,12 @@ EXPORT_OMP_ABI(get_wtime);
 // init/deinit of the shared library //
 ///////////////////////////////////////
 
+# if 0
 void __attribute__((constructor))
 __xkomp_init(void)
 {
-    xkomp_get();
+    // do not early init, it might fuck-up compute-sanitizer
+    //xkomp_get();
 }
 
 void __attribute__((destructor))
@@ -136,3 +138,4 @@ __xkomp_teardown(void)
     free(xkomp);
     xkomp = NULL;
 }
+# endif

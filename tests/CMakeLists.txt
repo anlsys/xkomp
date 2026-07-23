@@ -239,6 +239,25 @@ function(_xkomp_test_offload_setup tgt)
     target_link_options(${tgt}    PRIVATE ${_off})
 endfunction()
 
+# Expected-to-PASS test compiled with the PACKED task-body JIT ABI
+# (-fopenmp-task-jit-type=packed): each task body is forwarded to CGIR as a
+# self-contained void(void*,size_t) kernel over a packed capture buffer. Same
+# source as xkomp_add_test but a distinct target/CTest/output name (suffix
+# "_packed") so one source can be registered under both ABIs. Requires the
+# patched clang that knows the flag (as the whole taskgraph/JIT group does).
+function(xkomp_add_packed_test src label)
+    _xkomp_test_paths("${src}")
+    set(_xk_tgt  "${_xk_tgt}_packed")
+    set(_xk_test "${_xk_test}_packed")
+    set(_xk_base "${_xk_base}_packed")
+    add_executable(${_xk_tgt} ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=packed)
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed")
+endfunction()
+
 # Expected-to-PASS `omp target` test: like xkomp_add_test but compiled for the
 # machine's GPU. Skipped entirely when no offload device was detected (see the
 # offload-detection block above), since it cannot validate offload without one.
@@ -288,7 +307,7 @@ xkomp_add_xfail_test(directive/worksharing/single/omp_single_copyprivate.cc work
 
 # --- master / masked --------------------------------------------------------
 xkomp_add_test(directive/master/omp_master.cc                   master)
-xkomp_add_xfail_test(directive/masked/omp_masked.cc             masked)
+xkomp_add_test(directive/masked/omp_masked.cc                  masked)
 
 # --- barrier / atomic / critical --------------------------------------------
 xkomp_add_test(directive/barrier/omp_barrier.cc                 barrier)
@@ -307,8 +326,8 @@ xkomp_add_test(directive/tasking/omp_task_nested.cc            tasking)
 xkomp_add_test(directive/tasking/omp_parallel_tasks.cc         tasking)
 xkomp_add_test(directive/tasking/omp_task_untied.cc            tasking)
 xkomp_add_xfail_test(directive/tasking/omp_taskyield.cc        tasking)
-xkomp_add_xfail_test(directive/tasking/omp_taskgroup.cc        tasking)
-xkomp_add_xfail_test(directive/tasking/omp_task_if.cc          tasking)
+xkomp_add_test(directive/tasking/omp_taskgroup.cc             tasking)
+xkomp_add_test(directive/tasking/omp_task_if.cc               tasking)
 
 # --- teams (host) -- not implemented ----------------------------------------
 xkomp_add_xfail_test(directive/teams/omp_teams.cc              teams)
@@ -359,6 +378,20 @@ xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_host.cc              taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_host_deps.cc         taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_ptr.cc     taskgraph)
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
+
+# firstprivate STRUCT (aggregate) capture. Under the default (pointers) ABI this
+# falls back to the packed args[0]==tt kernel (aggregate not fusable); under the
+# packed ABI it uses the self-contained aggregate-memcpy kernel. Registered under
+# both to check the fallback stays correct and the packed aggregate path works.
+xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
+
+# packed task-body JIT ABI (-fopenmp-task-jit-type=packed) coverage:
+#   host        : scalar firstprivate only + externalized globals (no captures)
+#   host_local  : scalar firstprivate + shared-array (SHARED_ADDR) chain
+#   host_struct : aggregate (struct) firstprivate + shared-array chain
+xkomp_add_packed_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host.cc        taskgraph)
+xkomp_add_packed_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
+xkomp_add_packed_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
 
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
