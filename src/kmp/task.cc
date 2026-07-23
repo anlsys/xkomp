@@ -367,6 +367,13 @@ task_alloc(
         xkflags |= TASK_FLAG_DETACHABLE;    // a device task may submit commands
     }
 
+    // undeferred task (OpenMP `if(0)`): the compiler set this bit at creation.
+    // The task is still committed/scheduled normally (any thread may run it); the
+    // encountering thread just suspends until it completes (see task_wait(task)
+    // in __kmpc_omp_task / __kmpc_omp_task_with_deps_v2).
+    if (flags.undeferred)
+        xkflags |= TASK_FLAG_UNDEFERABLE;
+
     // if recording flag is set on parent, record that task.
     // TODO: if the `replayable(false)` is set, do not record
 
@@ -602,36 +609,21 @@ __kmpc_omp_task(
     // inert accesses at allocation time, so it can be committed as-is.
     xkomp->runtime.task_commit(task);
 
+    // undeferred task (`if(0)`): suspend the encountering thread until it
+    // completes. The task went through the normal scheduling path above, so any
+    // thread of the team may execute it meanwhile.
+    if (task->flags & TASK_FLAG_UNDEFERABLE)
+        xkomp->runtime.task_wait(task);
+
     return 0;
 }
 
-// Undeferred task (`#pragma omp task if(0)`). The task is submitted through the
-// NORMAL path (committed between these two calls -- see emitTaskCall in the
-// patched clang: begin_if0 / __kmpc_omp_task[_with_deps_v2] / complete_if0), so
-// any thread may execute it. `begin_if0` only marks it undeferred; `complete_if0`
-// suspends the encountering thread (work-stealing meanwhile) until that specific
-// task completed -- which is all `if(0)` requires. This is orthogonal to
-// taskgroups and dependences (both handled by the normal commit path).
-extern "C"
-void
-__kmpc_omp_task_begin_if0(ident_t * loc_ref, kmp_int32 gtid, kmp_task_t * ktask)
-{
-    (void) loc_ref; (void) gtid;
-    task_t * task = task_from_ktask(ktask);
-    task->flags |= TASK_FLAG_UNDEFERABLE;
-
-    __kmpc_omp_task(loc_ref, gtid, ktask);
-}
-
-extern "C"
-void
-__kmpc_omp_task_complete_if0(ident_t * loc_ref, kmp_int32 gtid, kmp_task_t * ktask)
-{
-    (void) loc_ref; (void) gtid;
-    task_t * task = task_from_ktask(ktask);
-    xkomp_t * xkomp = xkomp_get();
-    xkomp->runtime.task_wait(task);
-}
+// NOTE: OpenMP `if(0)` (undeferred tasks) are NOT lowered through
+// __kmpc_omp_task_begin_if0 / __kmpc_omp_task_complete_if0 anymore. The patched
+// clang instead sets an `undeferred` bit in kmp_tasking_flags at creation and
+// submits the task on the normal path; the runtime suspends the encountering
+// thread after committing it (see task_alloc + the TASK_FLAG_UNDEFERABLE checks
+// in __kmpc_omp_task / __kmpc_omp_task_with_deps_v2).
 
 extern "C"
 void
@@ -795,6 +787,13 @@ __kmpc_omp_task_with_deps_v2(
     }
 
     xkomp->runtime.task_commit(task);
+
+    // undeferred task (`if(0)` with a depend clause): suspend the encountering
+    // thread until it completes. It carries its own dependences and was committed
+    // on the normal path, so it is ordered after its predecessors and any thread
+    // may execute it -- no separate empty task / taskwait_deps is needed.
+    if (task->flags & TASK_FLAG_UNDEFERABLE)
+        xkomp->runtime.task_wait(task);
 
     # define TASK_CURRENT_NOT_QUEUED    0
     # define TASK_CURRENT_QUEUED        1

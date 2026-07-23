@@ -1,16 +1,18 @@
 // xkomp: supported  (task `if` clause: `if(0)` produces an undeferred task)
 //
-// A false `if` clause makes the task UNDEFERRED: the encountering thread runs
-// its body inline via __kmpc_omp_task_begin_if0 / __kmpc_omp_task_complete_if0
-// and does not proceed until it completed.  Three sub-tests:
-//   1. basic     : the body ran by the time control returns (before any taskwait).
+// A false `if` clause makes the task UNDEFERRED. In XKOMP the task is still
+// submitted on the normal scheduling path (any thread of the team may run it),
+// but the encountering thread suspends until that task completed before
+// proceeding -- conveyed by an `undeferred` bit in kmp_tasking_flags set at
+// creation, and honoured after commit in __kmpc_omp_task[_with_deps_v2].
+// Three sub-tests:
+//   1. basic     : the task has completed by the time control returns (before any taskwait).
 //   2. nested    : an if(0) task that itself spawns a (deferred) child.
-//   3. depend    : an if(0) task with a depend clause runs after its predecessor
-//                  (exercises __kmpc_omp_taskwait_deps_51).
+//   3. depend    : an if(0) task with a depend clause runs after its predecessor.
 
 #include "common.h"
 
-// (1) The if(0) body must have run inline, before the following taskwait.
+// (1) The if(0) task must have completed by the time the construct returns.
 static void
 test_if0_basic(void)
 {
@@ -24,7 +26,8 @@ test_if0_basic(void)
             #pragma omp task if(cond) shared(x) default(none)
             x = 7;
 
-            // x was written inline by the undeferred task; assert even before taskwait
+            // the encountering thread suspended until the undeferred task finished,
+            // so x is already written here -- even before any taskwait
             CHECK_EQ(x, 7);
 
             #pragma omp taskwait
@@ -33,8 +36,8 @@ test_if0_basic(void)
     }
 }
 
-// (2) An undeferred task that spawns a deferred child; the child is a child of
-// the undeferred task, waited via taskgroup deep-sync.
+// (2) An undeferred task that spawns a deferred child. The undeferred task is
+// waited by the encountering thread; its descendant is waited by the taskgroup.
 static void
 test_if0_nested(void)
 {
@@ -49,20 +52,22 @@ test_if0_nested(void)
             {
                 #pragma omp task if(cond) shared(inner, outer) default(none)
                 {
-                    outer = 1;                 // undeferred body (inline)
+                    outer = 1;                 // undeferred task body
                     #pragma omp task shared(inner) default(none)
                     inner = 2;                 // deferred grandchild
                 }
             }
-            // taskgroup deep-synced the undeferred task AND its descendant
+            // the undeferred task completed (waited on spawn) AND the taskgroup
+            // deep-synced its descendant
             CHECK_EQ(outer, 1);
             CHECK_EQ(inner, 2);
         }
     }
 }
 
-// (3) if(0) with a depend clause: the undeferred task must run after the prior
-// task that writes the same location.
+// (3) if(0) with a depend clause: the undeferred task carries its dependences and
+// is committed on the normal path, so it runs after its predecessor; the
+// encountering thread then suspends until it completed.
 static void
 test_if0_depend(void)
 {
@@ -79,7 +84,7 @@ test_if0_depend(void)
                 x = 5;
             }
 
-            // undeferred: waits for the producer (via taskwait_deps), runs inline
+            // undeferred: ordered after the producer via its own depend clause
             #pragma omp task if(cond) depend(in: x) shared(x, seen) default(none)
             seen = x;
 
@@ -95,8 +100,8 @@ main(void)
 {
     for (int r = 0; r < REPETITIONS; ++r)
     {
-        //test_if0_basic();
-        //test_if0_nested();
+        test_if0_basic();
+        test_if0_nested();
         test_if0_depend();
     }
     TEST_PASS();
