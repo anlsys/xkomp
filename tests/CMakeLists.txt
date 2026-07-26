@@ -258,6 +258,25 @@ function(xkomp_add_packed_test src label)
     set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed")
 endfunction()
 
+# Expected-to-PASS test compiled with the POINTERS task-body JIT ABI
+# (-fopenmp-task-jit-type=pointers): each task body is forwarded to CGIR as a
+# void(void**) kernel with one deduplicable per-value parameter per capture.
+# The compiler default is now 'none' (no IR forwarded), so this variant is what
+# keeps the pointers JIT/fusion path covered in-tree. Suffix "_pointers" so one
+# source can be registered under both ABIs (mirrors xkomp_add_packed_test).
+function(xkomp_add_pointers_test src label)
+    _xkomp_test_paths("${src}")
+    set(_xk_tgt  "${_xk_tgt}_pointers")
+    set(_xk_test "${_xk_test}_pointers")
+    set(_xk_base "${_xk_base}_pointers")
+    add_executable(${_xk_tgt} ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=pointers)
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};pointers")
+endfunction()
+
 # Expected-to-PASS `omp target` test: like xkomp_add_test but compiled for the
 # machine's GPU. Skipped entirely when no offload device was detected (see the
 # offload-detection block above), since it cannot validate offload without one.
@@ -384,6 +403,22 @@ xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
 # packed ABI it uses the self-contained aggregate-memcpy kernel. Registered under
 # both to check the fallback stays correct and the packed aggregate path works.
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
+
+# pointers task-body JIT ABI (-fopenmp-task-jit-type=pointers) coverage. The
+# compiler default is 'none' (no IR forwarded), so these explicit variants keep
+# the pointers JIT/fusion path exercised:
+#   axpby_host        : scalar firstprivate only + externalized globals (no captures)
+#   axpby_host_local  : scalar firstprivate + shared-array (SHARED_ADDR) chain
+#   axpby_host_struct : aggregate (struct) firstprivate -> packed args[0]==tt fallback
+#   axpy_host_global  : externalized global (no captures)
+#   axpy_host_local   : shared-array capture (SHARED_ADDR)
+#   axpy_host_ptr     : shared-pointer capture (SHARED_PTR)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host.cc        taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_global.cc  taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_local.cc   taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_ptr.cc     taskgraph)
 
 # packed task-body JIT ABI (-fopenmp-task-jit-type=packed) coverage:
 #   host        : scalar firstprivate only + externalized globals (no captures)
