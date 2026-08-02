@@ -87,6 +87,7 @@ extern "C"
 int
 xkomp_get_max_threads(void)
 {
+    xkomp_t * xkomp = xkomp_get();
     int nthreads = xkomp->env.OMP_NUM_THREADS;
     if (nthreads == 0)
     {
