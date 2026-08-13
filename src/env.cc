@@ -1,3 +1,4 @@
+
 # include <xkomp/xkomp.h>
 
 template <typename T>
@@ -50,7 +51,7 @@ xkomp_env_init_parse(
  *      - "none"     -> no passes
  *      - otherwise  -> the named passes; unknown names are warned and ignored
  *  Accepted names are the cgir pass names (see command_graph_pass_to_str):
- *  "copy-normalize", "copy-fuse", "reduce-node", "reduce-edge", "prog-fuse", "batch".
+ *  "copy-normalize", "copy-fuse", "reduce-node", "reduce-edge", "jit" "prog-fuse", "batch".
  */
 static cgir::command_graph_pass_set_t
 xkomp_env_init_parse_taskgraph_opt(void)
