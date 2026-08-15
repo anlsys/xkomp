@@ -25,19 +25,6 @@ xkcc main.c -o main
 - Pass `-fopenmp-task-jit-type=[pointers|packed]` to `xkcxx` so that the LLVM-IR/PTX of tasks/targets is kept after compile-time, and passed to the XKOMP runtime for JIT during taskgraph optimizations. With `pointers`, all arguments (firstprivate, shared, etc.) are stored in a `void ** args` array, referenced within the outlined region. With `packed`, they are packed in a `void * args, size_t size` compact structure.
 - The `OMP_TASKGRAPH_OPT=opt1,opt2,...,optn` can be used to enable `taskgraph` optimizations. Available optimizations are: `reduce-edge`, `reduce-node`, `batch`, `prog-fuse`, `jit`, `copy-normalize`, `copy-fuse`
 
-# TODO lists
-- access clause: add missing front-end in Clang and unit-tests for each clause/modifier.
-- taskgraph construct: implement front-end in Clang.
-- taskgraph conditional tasks: design and implement conditional tasks; so that they can be mapped to CUDA conditional nodes.
-- implement a coding agent to rebase weekly on llvm-project/llvm.
-- ala OmpSs
-  - implement taskiter construct (a "taskgraph" executed 'n' times" -- so that it can be mapped to CUDA conditional nodes).
-  - implement depend on taskloop
-- transparent tasks: implement in XKRT
-- large team of threads: currently XKRT uses 1 futex per team of thread. Waking up a team leads to a O(n) syscall -- with "n" the number of threads. While it is fine for small teams (1-16 threads) it is not optimal for large teams (>16 threads). Instead: use multiple futexes and wakeup in parallel
-- KMP ABI: verify and fix compatibility
-- GOMP ABI: implement it
-
 # Bits of history
 XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)
 This repo is a prototype implementation of OpenMP, with partial support for taskgraphs (6.0) and extensions for dataflow, on top of XKRT.
