@@ -368,6 +368,7 @@ if(XKOMP_TESTS_TARGET)
     xkomp_add_target_test(directive/target/omp_target_data.cc         target)
     xkomp_add_target_test(directive/target/omp_target_axpy.cc         target)
     xkomp_add_target_test(directive/target/omp_target_axpy_deps.cc    target)
+    xkomp_add_target_test(directive/target/omp_target_dot.cc          target)
 endif()
 
 # --- access clause (XKOMP extension) -- needs the patched LLVM/clang ---------
@@ -431,4 +432,5 @@ xkomp_add_packed_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskg
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
     xkomp_add_target_test(xkomp/taskgraph/xkomp_taskgraph_axpby_target.cc  taskgraph)
+    xkomp_add_target_test(xkomp/taskgraph/xkomp_taskgraph_dot_target.cc    taskgraph)
 endif()

@@ -46,23 +46,25 @@ xkomp_env_init_parse(
 /**
  *  OMP_TASKGRAPH_OPT: comma/space-separated list of cgir command-graph
  *  optimization passes applied when a recorded taskgraph is optimized.
- *      - unset      -> default trio (reduce-node, reduce-edge, batch)
+ *      - unset      -> default trio (reduce-node, reduce-edge, sequence)
  *      - empty ""   -> no passes (equivalent to "none")
  *      - "none"     -> no passes
  *      - otherwise  -> the named passes; unknown names are warned and ignored
  *  Accepted names are the cgir pass names (see command_graph_pass_to_str):
- *  "copy-normalize", "copy-fuse", "reduce-node", "reduce-edge", "jit" "prog-fuse", "batch".
+ *  "copy-normalize", "copy-fuse", "reduce-node", "reduce-edge", "jit", "prog-fuse", "sequence", "batch".
  */
 static cgir::command_graph_pass_set_t
 xkomp_env_init_parse_taskgraph_opt(void)
 {
     const char * value = getenv("OMP_TASKGRAPH_OPT");
 
-    // unset -> default trio
+    // unset -> default trio: reduce the graph, then collapse same-device OpenMP
+    // task chains into is_sequence super-task batches (the batch pass is opt-in
+    // via OMP_TASKGRAPH_OPT for vendor-graph capture).
     if (value == NULL)
         return cgir::COMMAND_GRAPH_PASS_REDUCE_NODE_BIT
              | cgir::COMMAND_GRAPH_PASS_REDUCE_EDGE_BIT
-             | cgir::COMMAND_GRAPH_PASS_BATCH_BIT;
+             | cgir::COMMAND_GRAPH_PASS_SEQUENCE_BIT;
 
     // set (possibly empty) -> parse tokens; an empty string yields no tokens == "none"
     cgir::command_graph_pass_set_t passes = 0;
