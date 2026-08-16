@@ -237,6 +237,7 @@ function(_xkomp_test_offload_setup tgt)
     # device image and links the offload runtime at link time)
     target_compile_options(${tgt} PRIVATE ${_off})
     target_link_options(${tgt}    PRIVATE ${_off})
+    target_compile_options(${tgt} PRIVATE -fopenmp-version=60)
 endfunction()
 
 # Expected-to-PASS test compiled with the PACKED task-body JIT ABI

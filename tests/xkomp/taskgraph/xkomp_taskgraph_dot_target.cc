@@ -76,6 +76,10 @@ main(void)
 
                 pragma_omp_taskgraph(gid, flags, [&] (void)
                 {
+                    // x, y and result are resident on the device (target enter data
+                    // above), so map(present:) asserts their presence without
+                    // copying; the host poison of result is therefore not copied in.
+
                     // (1) reset the device accumulator (predecessor of the reduce)
                     #pragma omp target map(present: result[0:1]) \
                             depend(out: result[0]) nowait

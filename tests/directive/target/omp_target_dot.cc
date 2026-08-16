@@ -68,6 +68,8 @@ main(void)
                 // Two independent async reductions: distinct depend tokens, so
                 // they may overlap and each needs its own device reduction
                 // buffer / KLE.
+                // The operands are resident on the device (target enter data
+                // above), so map(present:) asserts their presence without copying.
                 #pragma omp target teams distribute parallel for \
                         reduction(+: dot_xy) map(present: x[0:N], y[0:N]) \
                         depend(inout: dot_xy) nowait
