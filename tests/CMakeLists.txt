@@ -47,6 +47,12 @@ endif()
 find_package(HWLOC REQUIRED)
 find_package(XKRT  REQUIRED)
 
+# Per-test wall-clock timeout: a deadlocked/hung test is killed and reported as
+# FAILED instead of hanging `make test` forever. Override with
+#   -DXKOMP_TEST_TIMEOUT=<seconds>
+set(XKOMP_TEST_TIMEOUT 5 CACHE STRING
+    "Per-test timeout in seconds; a hung/deadlocked test is killed and reported as failed")
+
 option(XKOMP_TESTS_TARGET
        "Build tests that use 'omp target' (require the offload runtime)" ON)
 
@@ -203,7 +209,7 @@ function(xkomp_add_test src label)
     _xkomp_test_setup(${_xk_tgt})
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label}")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label}" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 # Test for a construct XKOMP does not support yet.  Built on demand (so a link
@@ -221,6 +227,7 @@ function(xkomp_add_xfail_test src label)
             -DTARGET=${_xk_tgt}
             -DBIN_DIR=${CMAKE_BINARY_DIR}
             -DEXE=$<TARGET_FILE:${_xk_tgt}>
+            -DRUN_TIMEOUT=${XKOMP_TEST_TIMEOUT}
             -P ${CMAKE_SOURCE_DIR}/cmake/run_xfail.cmake)
     set_tests_properties("${_xk_test}" PROPERTIES LABELS "unsupported;${label}")
 endfunction()
@@ -256,7 +263,7 @@ function(xkomp_add_packed_test src label)
     target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=packed)
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 # Expected-to-PASS test compiled with the POINTERS task-body JIT ABI
@@ -275,7 +282,7 @@ function(xkomp_add_pointers_test src label)
     target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=pointers)
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};pointers")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};pointers" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 # Expected-to-PASS `omp target` test: like xkomp_add_test but compiled for the
@@ -291,7 +298,7 @@ function(xkomp_add_target_test src label)
     _xkomp_test_offload_setup(${_xk_tgt})
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};gpu")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};gpu" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 ##############################################################################
