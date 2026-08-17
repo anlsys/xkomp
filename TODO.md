@@ -11,3 +11,4 @@
 1. KMP ABI: verify and fix compatibility
 1. GOMP ABI: implement it
 1. OMPT: add support for it. Likely, add a tooling interface in XKRT, and implement OMPT on top of it
+1. Port `src/kmp/arch/z_Linux_asm.S` to ARM
