@@ -81,8 +81,7 @@ if (SUPPORT_MICROTASK_INTEL)
 endif()
 
 if(NOT enabled_count EQUAL 1)
-    message(FATAL_ERROR "Invalid configuration: Exactly one of  56 if (SUPPORT_MICROTASK_GENERIC)
-, SUPPORT_MICROTASK_LIBFFI, or SUPPORT_MICROTASK_INTEL must be ON. Currently, ${enabled_count} are enabled.")
+    message(FATAL_ERROR "Invalid configuration: Exactly one of SUPPORT_MICROTASK_GENERIC, SUPPORT_MICROTASK_LIBFFI, or SUPPORT_MICROTASK_INTEL must be ON. Currently, ${enabled_count} are enabled.")
 endif()
 
 # XKOMP Lib
