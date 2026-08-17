@@ -1,4 +1,5 @@
 # TODO list
+1. Implement a C++ interface, ala xkomp++.h but for all constructs
 1. access clause: add missing front-end in Clang and unit-tests for each clause/modifier.
 1. taskgraph construct: implement front-end in Clang.
 1. taskgraph conditional tasks: design and implement conditional tasks; so that they can be mapped to CUDA conditional nodes.
