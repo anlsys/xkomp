@@ -19,8 +19,10 @@ typedef void * omp_depend_t;
     ret omp_##suffix(__VA_ARGS__);        \
     ret xkomp_##suffix(__VA_ARGS__)
 
+#ifdef __cplusplus
 extern "C"
 {
+# endif /* __cplusplus */
     // threading
     DECLARE_OMP_ABI(int, get_thread_num, void);
     DECLARE_OMP_ABI(int, get_num_threads, void);
@@ -53,7 +55,27 @@ extern "C"
     // TODO: currently in libomptarget, should be moved to xkomp
     void * omp_get_mapped_ptr(const void * ptr, int device_num);
 
+    typedef enum    omp_sync_hint_t
+    {
+        omp_sync_hint_none           = 0,
+        omp_lock_hint_none           = omp_sync_hint_none,
+        omp_sync_hint_uncontended    = (1 << 0),
+        omp_lock_hint_uncontended    = omp_sync_hint_uncontended,
+        omp_sync_hint_contended      = (1 << 1),
+        omp_lock_hint_contended      = omp_sync_hint_contended,
+        omp_sync_hint_nonspeculative = (1 << 2),
+        omp_lock_hint_nonspeculative = omp_sync_hint_nonspeculative,
+        omp_sync_hint_speculative    = (1 << 3),
+        omp_lock_hint_speculative    = omp_sync_hint_speculative,
+        kmp_lock_hint_hle            = (1 << 16),
+        kmp_lock_hint_rtm            = (1 << 17),
+        kmp_lock_hint_adaptive       = (1 << 18)
+
+    }               omp_sync_hint_t;
+
+#ifdef __cplusplus
 };
+#endif /* __cplusplus */
 
 #undef DECLARE_OMP_ABI
 

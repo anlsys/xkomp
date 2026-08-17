@@ -27,9 +27,19 @@ if(NOT build_rc EQUAL 0)
     message(FATAL_ERROR "[unsupported] '${TARGET}': construct not supported (build failed)")
 endif()
 
-execute_process(COMMAND ${EXE} RESULT_VARIABLE run_rc)
+# Bound only the run phase (not the on-demand build above): a deadlocked test is
+# killed after RUN_TIMEOUT seconds instead of hanging forever. On timeout,
+# execute_process leaves run_rc as a descriptive string (non-zero) -> FAILED.
+if(DEFINED RUN_TIMEOUT AND RUN_TIMEOUT GREATER 0)
+    execute_process(COMMAND ${EXE} RESULT_VARIABLE run_rc TIMEOUT ${RUN_TIMEOUT})
+else()
+    execute_process(COMMAND ${EXE} RESULT_VARIABLE run_rc)
+endif()
 
 if(NOT run_rc EQUAL 0)
+    if(run_rc MATCHES "[Tt]imeout")
+        message(FATAL_ERROR "[unsupported] '${TARGET}': killed after ${RUN_TIMEOUT}s (possible deadlock/hang)")
+    endif()
     message(FATAL_ERROR "[unsupported] '${TARGET}': construct not supported (exited ${run_rc})")
 endif()
 

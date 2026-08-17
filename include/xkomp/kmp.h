@@ -4,10 +4,6 @@
 # include <stdint.h>
 # include <stdlib.h>
 
-int __kmp_invoke_microtask(
-    void (*pkfn) (int * global_tid, int * bound_tid, ...),
-    int gtid, int npr, int argc, void *argv[] );
-
 typedef char kmp_int8;
 typedef unsigned char kmp_uint8;
 typedef short kmp_int16;
@@ -273,8 +269,15 @@ typedef struct kmp_access_info {
     } flags;
 } kmp_access_info_t;
 
-int
-__kmp_omp_target_memcpy_async(
+# ifdef __cplusplus
+extern "C" {
+# endif /* __cplusplus */
+
+int __kmp_invoke_microtask(
+    void (*pkfn) (int * global_tid, int * bound_tid, ...),
+    int gtid, int npr, int argc, void *argv[] );
+
+int __kmp_omp_target_memcpy_async(
     void * dst_ptr,
     const void * src_ptr,
     size_t length,
@@ -285,5 +288,9 @@ __kmp_omp_target_memcpy_async(
     int depobj_count,
     void * depobj_list
 );
+
+# ifdef __cplusplus
+};
+# endif /* __cplusplus */
 
 #endif /* __KMP_H__ */

@@ -47,6 +47,12 @@ endif()
 find_package(HWLOC REQUIRED)
 find_package(XKRT  REQUIRED)
 
+# Per-test wall-clock timeout: a deadlocked/hung test is killed and reported as
+# FAILED instead of hanging `make test` forever. Override with
+#   -DXKOMP_TEST_TIMEOUT=<seconds>
+set(XKOMP_TEST_TIMEOUT 5 CACHE STRING
+    "Per-test timeout in seconds; a hung/deadlocked test is killed and reported as failed")
+
 option(XKOMP_TESTS_TARGET
        "Build tests that use 'omp target' (require the offload runtime)" ON)
 
@@ -203,7 +209,7 @@ function(xkomp_add_test src label)
     _xkomp_test_setup(${_xk_tgt})
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label}")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label}" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 # Test for a construct XKOMP does not support yet.  Built on demand (so a link
@@ -221,6 +227,7 @@ function(xkomp_add_xfail_test src label)
             -DTARGET=${_xk_tgt}
             -DBIN_DIR=${CMAKE_BINARY_DIR}
             -DEXE=$<TARGET_FILE:${_xk_tgt}>
+            -DRUN_TIMEOUT=${XKOMP_TEST_TIMEOUT}
             -P ${CMAKE_SOURCE_DIR}/cmake/run_xfail.cmake)
     set_tests_properties("${_xk_test}" PROPERTIES LABELS "unsupported;${label}")
 endfunction()
@@ -237,6 +244,7 @@ function(_xkomp_test_offload_setup tgt)
     # device image and links the offload runtime at link time)
     target_compile_options(${tgt} PRIVATE ${_off})
     target_link_options(${tgt}    PRIVATE ${_off})
+    target_compile_options(${tgt} PRIVATE -fopenmp-version=60)
 endfunction()
 
 # Expected-to-PASS test compiled with the PACKED task-body JIT ABI
@@ -255,7 +263,26 @@ function(xkomp_add_packed_test src label)
     target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=packed)
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};packed" TIMEOUT ${XKOMP_TEST_TIMEOUT})
+endfunction()
+
+# Expected-to-PASS test compiled with the POINTERS task-body JIT ABI
+# (-fopenmp-task-jit-type=pointers): each task body is forwarded to CGIR as a
+# void(void**) kernel with one deduplicable per-value parameter per capture.
+# The compiler default is now 'none' (no IR forwarded), so this variant is what
+# keeps the pointers JIT/fusion path covered in-tree. Suffix "_pointers" so one
+# source can be registered under both ABIs (mirrors xkomp_add_packed_test).
+function(xkomp_add_pointers_test src label)
+    _xkomp_test_paths("${src}")
+    set(_xk_tgt  "${_xk_tgt}_pointers")
+    set(_xk_test "${_xk_test}_pointers")
+    set(_xk_base "${_xk_base}_pointers")
+    add_executable(${_xk_tgt} ${src})
+    _xkomp_test_setup(${_xk_tgt})
+    target_compile_options(${_xk_tgt} PRIVATE -fopenmp-task-jit-type=pointers)
+    _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
+    add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};pointers" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 # Expected-to-PASS `omp target` test: like xkomp_add_test but compiled for the
@@ -271,7 +298,7 @@ function(xkomp_add_target_test src label)
     _xkomp_test_offload_setup(${_xk_tgt})
     _xkomp_test_output(${_xk_tgt} "${_xk_dir}" "${_xk_base}")
     add_test(NAME "${_xk_test}" COMMAND ${_xk_tgt})
-    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};gpu")
+    set_tests_properties("${_xk_test}" PROPERTIES LABELS "${label};gpu" TIMEOUT ${XKOMP_TEST_TIMEOUT})
 endfunction()
 
 ##############################################################################
@@ -349,6 +376,7 @@ if(XKOMP_TESTS_TARGET)
     xkomp_add_target_test(directive/target/omp_target_data.cc         target)
     xkomp_add_target_test(directive/target/omp_target_axpy.cc         target)
     xkomp_add_target_test(directive/target/omp_target_axpy_deps.cc    target)
+    xkomp_add_target_test(directive/target/omp_target_dot.cc          target)
 endif()
 
 # --- access clause (XKOMP extension) -- needs the patched LLVM/clang ---------
@@ -385,6 +413,22 @@ xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
 # both to check the fallback stays correct and the packed aggregate path works.
 xkomp_add_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
 
+# pointers task-body JIT ABI (-fopenmp-task-jit-type=pointers) coverage. The
+# compiler default is 'none' (no IR forwarded), so these explicit variants keep
+# the pointers JIT/fusion path exercised:
+#   axpby_host        : scalar firstprivate only + externalized globals (no captures)
+#   axpby_host_local  : scalar firstprivate + shared-array (SHARED_ADDR) chain
+#   axpby_host_struct : aggregate (struct) firstprivate -> packed args[0]==tt fallback
+#   axpy_host_global  : externalized global (no captures)
+#   axpy_host_local   : shared-array capture (SHARED_ADDR)
+#   axpy_host_ptr     : shared-pointer capture (SHARED_PTR)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host.cc        taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_local.cc  taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_global.cc  taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_local.cc   taskgraph)
+xkomp_add_pointers_test(xkomp/taskgraph/xkomp_taskgraph_axpy_host_ptr.cc     taskgraph)
+
 # packed task-body JIT ABI (-fopenmp-task-jit-type=packed) coverage:
 #   host        : scalar firstprivate only + externalized globals (no captures)
 #   host_local  : scalar firstprivate + shared-array (SHARED_ADDR) chain
@@ -396,4 +440,5 @@ xkomp_add_packed_test(xkomp/taskgraph/xkomp_taskgraph_axpby_host_struct.cc taskg
 # target/offload taskgraphs
 if(XKOMP_TESTS_TARGET)
     xkomp_add_target_test(xkomp/taskgraph/xkomp_taskgraph_axpby_target.cc  taskgraph)
+    xkomp_add_target_test(xkomp/taskgraph/xkomp_taskgraph_dot_target.cc    taskgraph)
 endif()

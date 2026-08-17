@@ -38,7 +38,7 @@ xkomp_taskgraph_begin(
             xkomp->runtime.command_graph_from_task_dependency_graph(&taskgraph.tdg, &taskgraph.cg);
 
             /* optimize the CG with the passes selected by OMP_TASKGRAPH_OPT
-             * (defaults to reduce-node, reduce-edge, batch) */
+             * (defaults to reduce-node, reduce-edge, sequence) */
             taskgraph.cg.optimize(xkomp->env.OMP_TASKGRAPH_OPT);
         }
 
