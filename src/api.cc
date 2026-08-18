@@ -124,16 +124,16 @@ __xkomp_init(void)
 void __attribute__((destructor))
 __xkomp_teardown(void)
 {
-    if (xkomp)
-    {
-        for (xkomp_team_entry_t & entry : xkomp->teams)
-            xkomp->runtime.team_join(&entry.team);
-        xkomp->teams.~small_vector_t();
+    // if (xkomp)
+    // {
+    //     for (xkomp_team_entry_t & entry : xkomp->teams)
+    //         xkomp->runtime.team_join(&entry.team);
+    //     xkomp->teams.~small_vector_t();
 
-        xkomp->runtime.deinit();
-        xkomp->taskgraphs.~map();
-        xkomp->formats.kmp.per_loc.~unordered_map();
-        free(xkomp);
-        xkomp = NULL;
-    }
+    //     xkomp->runtime.deinit();
+    //     xkomp->taskgraphs.~map();
+    //     xkomp->formats.kmp.per_loc.~unordered_map();
+    //     free(xkomp);
+    //     xkomp = NULL;
+    // }
 }
