@@ -18,7 +18,7 @@ xkomp_get(void)
         xkomp->formats.kmp.per_loc_lock = SPINLOCK_INITIALIZER;
         // register the OMPT bridge before init(), so runtime.init() discovers
         // and activates the OMPT tool (no-op if OMPT support is disabled)
-        XKOMP_OMPT_EMIT(connect(&xkomp->runtime));
+        XKOMP_OMPT_EMIT(connect, &xkomp->runtime);
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);

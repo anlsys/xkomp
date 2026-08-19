@@ -16,7 +16,7 @@ fork_call_wrapper(
     assert(thread);
 
     // the implicit task is this thread's execution of the region body
-    XKOMP_OMPT_EMIT(implicit_task_begin(thread));
+    XKOMP_OMPT_EMIT(implicit_task_begin, thread);
 
     wargs_t * wargs = (wargs_t *) thread->team->desc.args;
     wargs->fn(wargs->data);
@@ -24,7 +24,7 @@ fork_call_wrapper(
     xkomp_t * omp = xkomp_get();
     omp->runtime.team_barrier<true>(thread->team, thread);
 
-    XKOMP_OMPT_EMIT(implicit_task_end(thread));
+    XKOMP_OMPT_EMIT(implicit_task_end, thread);
 
     return NULL;
 }

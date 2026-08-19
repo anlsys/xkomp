@@ -55,8 +55,8 @@
  * relies on runtime_t/team_t/thread_t and XKRT_NAMESPACE_USE from xkomp.h.
  *
  * Call sites emit an event with the XKOMP_OMPT_EMIT() macro, e.g.
- *     XKOMP_OMPT_EMIT(implicit_task_begin(thread));
- * which forwards to the matching xkomp_ompt_<...> helper below, or expands to a
+ *     XKOMP_OMPT_EMIT(implicit_task_begin, thread);
+ * which forwards to the matching xkomp_ompt_<name> helper below, or expands to a
  * no-op (arguments unevaluated) when OMPT is compiled out.
  */
 
@@ -85,10 +85,10 @@ void xkomp_ompt_implicit_task_begin(thread_t * thread);
 void xkomp_ompt_implicit_task_end(thread_t * thread);
 
 /**
- * Emit an OMPT event by forwarding to its xkomp_ompt_<call> helper. The no-op
+ * Emit an OMPT event by forwarding to its xkomp_ompt_<name> helper. The no-op
  * variant (OMPT disabled) is defined in <xkomp/xkomp.h>.
- *   XKOMP_OMPT_EMIT(parallel_begin(&team, tls, n, NULL));
+ *   XKOMP_OMPT_EMIT(parallel_begin, &team, tls, n, NULL);
  */
-# define XKOMP_OMPT_EMIT(call) xkomp_ompt_##call
+# define XKOMP_OMPT_EMIT(name, ...) xkomp_ompt_##name(__VA_ARGS__)
 
 #endif /* __XKOMP_OMPT_H__ */

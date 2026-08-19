@@ -137,7 +137,7 @@ void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
 # if XKRT_SUPPORT_TOOLS && XKOMP_SUPPORT_OMPT
 #  include <xkomp/ompt.h>
 # else
-#  define XKOMP_OMPT_EMIT(call) do {} while (0)
+#  define XKOMP_OMPT_EMIT(name, ...) do {} while (0)
 # endif
 
 # endif /* __XKOMP_H__ */

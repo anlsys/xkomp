@@ -101,12 +101,9 @@ static thread_local bool        TLS_INITIAL_TASK   = false;
 /* process-wide unique id counter */
 static std::atomic<uint64_t>    OMPT_UID{1};
 
-/* reinterpret an XKRT tool-data slot as an OMPT data slot (layout-identical) */
-static inline ompt_data_t *
-as_ompt(xkrt_tool_data_t * d)
-{
-    return reinterpret_cast<ompt_data_t *>(d);
-}
+/* reinterpret an XKRT tool-data slot (&x->tool_data) as an OMPT data slot;
+ * both are layout-identical 64-bit unions {uint64_t; void*} */
+# define OMPT_DATA(d) (reinterpret_cast<ompt_data_t *>(d))
 
 /* invoke callback EVENT (of concrete type TYPE) if registered */
 # define OMPT_CALL(EVENT, TYPE, ...)                                            \
@@ -142,7 +139,7 @@ on_thread_start(runtime_t * runtime, thread_t * thread)
         if (type == ompt_thread_initial)
         {
             OMPT_CALL(ompt_callback_implicit_task, ompt_callback_implicit_task_t,
-                      ompt_scope_begin, NULL, as_ompt(&thread->implicit_task.tool_data),
+                      ompt_scope_begin, NULL, OMPT_DATA(&thread->implicit_task.tool_data),
                       1, 0, ompt_task_initial);
             TLS_INITIAL_TASK = true;
         }
@@ -175,8 +172,8 @@ on_task_create(runtime_t * runtime, task_t * task)
 
     const int has_deps = (task->flags & TASK_FLAG_ACCESSES) ? 1 : 0;
 
-    ompt_data_t * parent = task->parent ? as_ompt(&task->parent->tool_data) : NULL;
-    ompt_data_t * child  = as_ompt(&task->tool_data);
+    ompt_data_t * parent = task->parent ? OMPT_DATA(&task->parent->tool_data) : NULL;
+    ompt_data_t * child  = OMPT_DATA(&task->tool_data);
     child->ptr = NULL; /* fresh datum for the tool */
 
     OMPT_CALL(ompt_callback_task_create, ompt_callback_task_create_t,
@@ -190,9 +187,9 @@ on_task_schedule(runtime_t * runtime, thread_t * thread, task_t * prev, task_t *
     (void) runtime; (void) thread;
 
     OMPT_CALL(ompt_callback_task_schedule, ompt_callback_task_schedule_t,
-              prev ? as_ompt(&prev->tool_data) : NULL,
+              prev ? OMPT_DATA(&prev->tool_data) : NULL,
               ompt_task_switch,
-              next ? as_ompt(&next->tool_data) : NULL);
+              next ? OMPT_DATA(&next->tool_data) : NULL);
 }
 
 static void
@@ -201,7 +198,7 @@ on_task_complete(runtime_t * runtime, task_t * task)
     (void) runtime;
 
     OMPT_CALL(ompt_callback_task_schedule, ompt_callback_task_schedule_t,
-              as_ompt(&task->tool_data), ompt_task_complete, NULL);
+              OMPT_DATA(&task->tool_data), ompt_task_complete, NULL);
 }
 
 static ompt_dependence_type_t
@@ -254,7 +251,7 @@ on_task_accesses(runtime_t * runtime, task_t * task, const access_t * accesses, 
     }
 
     OMPT_CALL(ompt_callback_dependences, ompt_callback_dependences_t,
-              as_ompt(&task->tool_data), deps, (int) n);
+              OMPT_DATA(&task->tool_data), deps, (int) n);
 
     free(deps);
 }
@@ -290,9 +287,9 @@ on_barrier(runtime_t * runtime, team_t * team, thread_t * thread, xkrt_scope_t s
     /* XKRT cannot tell apart the various OpenMP barrier kinds (implicit parallel
      * / workshare / explicit), same limitation as libgomp: report a generic
      * implicit-parallel barrier. */
-    ompt_data_t * parallel_data = team ? as_ompt(&team->tool_data) : NULL;
+    ompt_data_t * parallel_data = team ? OMPT_DATA(&team->tool_data) : NULL;
     ompt_data_t * task_data     = (thread && thread->current_task)
-                                ? as_ompt(&thread->current_task->tool_data) : NULL;
+                                ? OMPT_DATA(&thread->current_task->tool_data) : NULL;
     emit_sync_region(ompt_sync_region_barrier_implicit_parallel, scope, parallel_data, task_data);
 }
 
@@ -300,8 +297,8 @@ static void
 on_taskwait(runtime_t * runtime, thread_t * thread, task_t * task, xkrt_scope_t scope)
 {
     (void) runtime;
-    ompt_data_t * parallel_data = (thread && thread->team) ? as_ompt(&thread->team->tool_data) : NULL;
-    ompt_data_t * task_data     = task ? as_ompt(&task->tool_data) : NULL;
+    ompt_data_t * parallel_data = (thread && thread->team) ? OMPT_DATA(&thread->team->tool_data) : NULL;
+    ompt_data_t * task_data     = task ? OMPT_DATA(&task->tool_data) : NULL;
     emit_sync_region(ompt_sync_region_taskwait, scope, parallel_data, task_data);
 }
 
@@ -309,8 +306,8 @@ static void
 on_taskgroup(runtime_t * runtime, thread_t * thread, task_t * task, xkrt_scope_t scope)
 {
     (void) runtime;
-    ompt_data_t * parallel_data = (thread && thread->team) ? as_ompt(&thread->team->tool_data) : NULL;
-    ompt_data_t * task_data     = task ? as_ompt(&task->tool_data) : NULL;
+    ompt_data_t * parallel_data = (thread && thread->team) ? OMPT_DATA(&thread->team->tool_data) : NULL;
+    ompt_data_t * task_data     = task ? OMPT_DATA(&task->tool_data) : NULL;
     emit_sync_region(ompt_sync_region_taskgroup, scope, parallel_data, task_data);
 }
 
@@ -324,11 +321,11 @@ xkomp_ompt_parallel_begin(team_t * team, thread_t * encountering, unsigned int n
     if (!OMPT_ENABLED)
         return ;
 
-    ompt_data_t * parallel_data = as_ompt(&team->tool_data);
+    ompt_data_t * parallel_data = OMPT_DATA(&team->tool_data);
     parallel_data->ptr = NULL; /* fresh datum for this region (teams are reused) */
 
     ompt_data_t * enc_task = (encountering && encountering->current_task)
-                           ? as_ompt(&encountering->current_task->tool_data) : NULL;
+                           ? OMPT_DATA(&encountering->current_task->tool_data) : NULL;
 
     OMPT_CALL(ompt_callback_parallel_begin, ompt_callback_parallel_begin_t,
               enc_task, /* encountering_task_frame */ NULL, parallel_data,
@@ -341,9 +338,9 @@ xkomp_ompt_parallel_end(team_t * team, thread_t * encountering, const void * cod
     if (!OMPT_ENABLED)
         return ;
 
-    ompt_data_t * parallel_data = as_ompt(&team->tool_data);
+    ompt_data_t * parallel_data = OMPT_DATA(&team->tool_data);
     ompt_data_t * enc_task = (encountering && encountering->current_task)
-                           ? as_ompt(&encountering->current_task->tool_data) : NULL;
+                           ? OMPT_DATA(&encountering->current_task->tool_data) : NULL;
 
     OMPT_CALL(ompt_callback_parallel_end, ompt_callback_parallel_end_t,
               parallel_data, enc_task, ompt_parallel_team, codeptr);
@@ -356,8 +353,8 @@ xkomp_ompt_implicit_task_begin(thread_t * thread)
         return ;
 
     team_t * team = thread->team;
-    ompt_data_t * parallel_data = team ? as_ompt(&team->tool_data) : NULL;
-    ompt_data_t * task_data     = as_ompt(&thread->implicit_task.tool_data);
+    ompt_data_t * parallel_data = team ? OMPT_DATA(&team->tool_data) : NULL;
+    ompt_data_t * task_data     = OMPT_DATA(&thread->implicit_task.tool_data);
     task_data->ptr = NULL; /* fresh datum for this region */
 
     const unsigned int team_size = team ? (unsigned int) team->priv.nthreads : 1;
@@ -373,7 +370,7 @@ xkomp_ompt_implicit_task_end(thread_t * thread)
     if (!OMPT_ENABLED)
         return ;
 
-    ompt_data_t * task_data = as_ompt(&thread->implicit_task.tool_data);
+    ompt_data_t * task_data = OMPT_DATA(&thread->implicit_task.tool_data);
 
     OMPT_CALL(ompt_callback_implicit_task, ompt_callback_implicit_task_t,
               ompt_scope_end, /* parallel_data */ NULL, task_data,
@@ -448,7 +445,7 @@ xkomp_ompt_get_parallel_info(int ancestor_level, ompt_data_t ** parallel_data, i
     if (thread == NULL || thread->team == NULL)
         return 0;
     if (parallel_data)
-        *parallel_data = as_ompt(&thread->team->tool_data);
+        *parallel_data = OMPT_DATA(&thread->team->tool_data);
     if (team_size)
         *team_size = thread->team->priv.nthreads;
     return 2; /* information available and up to date */
@@ -464,11 +461,11 @@ xkomp_ompt_get_task_info(int ancestor_level, int * flags, ompt_data_t ** task_da
     if (thread == NULL || thread->current_task == NULL)
         return 0;
     if (task_data)
-        *task_data = as_ompt(&thread->current_task->tool_data);
+        *task_data = OMPT_DATA(&thread->current_task->tool_data);
     if (task_frame)
         *task_frame = NULL;
     if (parallel_data)
-        *parallel_data = thread->team ? as_ompt(&thread->team->tool_data) : NULL;
+        *parallel_data = thread->team ? OMPT_DATA(&thread->team->tool_data) : NULL;
     if (thread_num)
         *thread_num = thread->tid;
     if (flags)
@@ -673,7 +670,7 @@ xkomp_ompt_do_finalize(void)
     if (thread && TLS_INITIAL_TASK)
     {
         OMPT_CALL(ompt_callback_implicit_task, ompt_callback_implicit_task_t,
-                  ompt_scope_end, NULL, as_ompt(&thread->implicit_task.tool_data),
+                  ompt_scope_end, NULL, OMPT_DATA(&thread->implicit_task.tool_data),
                   0, 0, ompt_task_initial);
         TLS_INITIAL_TASK = false;
     }

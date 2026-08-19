@@ -99,10 +99,10 @@ xkomp_parallel(
 
         // parallel_begin must precede team_create: for a 1-thread team the master
         // runs the region body (and its implicit-task events) inline in team_create
-        XKOMP_OMPT_EMIT(parallel_begin(&team, tls, 1, NULL));
+        XKOMP_OMPT_EMIT(parallel_begin, &team, tls, 1, NULL);
         omp->runtime.team_create(&team);
         omp->runtime.team_join(&team);
-        XKOMP_OMPT_EMIT(parallel_end(&team, tls, NULL));
+        XKOMP_OMPT_EMIT(parallel_end, &team, tls, NULL);
         return ;
     }
 
@@ -142,11 +142,11 @@ xkomp_parallel(
     // the body's own trailing `team_barrier` (in `routine`) provides the
     // implicit end-of-region barrier and drains any deferred tasks.
     team->desc.args = args;
-    XKOMP_OMPT_EMIT(parallel_begin(team, tls, (unsigned int) team->priv.nthreads, NULL));
+    XKOMP_OMPT_EMIT(parallel_begin, team, tls, (unsigned int) team->priv.nthreads, NULL);
     omp->runtime.team_parallel_for(team,
         [omp, routine] (thread_t * thread) {
             routine(&omp->runtime, thread->team, thread);
         }
     );
-    XKOMP_OMPT_EMIT(parallel_end(team, tls, NULL));
+    XKOMP_OMPT_EMIT(parallel_end, team, tls, NULL);
 }
