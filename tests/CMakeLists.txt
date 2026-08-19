@@ -388,6 +388,32 @@ if(XKOMP_TESTS_ACCESS)
 endif()
 
 ##############################################################################
+# ompt/ : OMPT bridge (XKRT-T -> OMPT)                                        #
+##############################################################################
+# Builds a small standard OMPT tool (loadable module) and a plain-OpenMP driver.
+# The driver runs with OMP_TOOL_LIBRARIES pointing at the tool; the test passes
+# when the tool prints "XKOMP-OMPT:OK" from its finalize callback. Requires
+# XKOMP built with -DSUPPORT_OMPT=ON (and XKRT with -DUSE_TOOLS=ON).
+if(SUPPORT_OMPT)
+    # standard OMPT tool (.so) -- only needs the vendored omp-tools.h, no xkomp link
+    add_library(xkomp_ompt_tool MODULE ompt/tool.cc)
+    target_compile_features(xkomp_ompt_tool PRIVATE cxx_std_20)
+    target_include_directories(xkomp_ompt_tool PRIVATE ${CMAKE_SOURCE_DIR}/include)
+
+    # plain-OpenMP driver, linked to the in-tree xkomp like every other test
+    add_executable(ompt_driver ompt/driver.cc)
+    _xkomp_test_setup(ompt_driver)
+    _xkomp_test_output(ompt_driver "ompt" "driver")
+
+    add_test(NAME "ompt/driver" COMMAND ompt_driver)
+    set_tests_properties("ompt/driver" PROPERTIES
+        ENVIRONMENT "OMP_TOOL_LIBRARIES=$<TARGET_FILE:xkomp_ompt_tool>"
+        PASS_REGULAR_EXPRESSION "XKOMP-OMPT:OK"
+        FAIL_REGULAR_EXPRESSION "XKOMP-OMPT:MISSING"
+        LABELS "ompt")
+endif()
+
+##############################################################################
 # xkomp/ : tests of the xkomp++.h C++ interfaces                            #
 ##############################################################################
 

@@ -127,4 +127,17 @@ void xkomp_task_register_formats_kmp_target(xkomp_t * xkomp);
 extern "C"
 void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
 
+/*
+ * OMPT bridge. When XKRT provides the tooling interface and XKOMP was built with
+ * OMPT support, pull in the bridge helpers together with the XKOMP_OMPT_EMIT()
+ * macro; otherwise define XKOMP_OMPT_EMIT() as a no-op so call sites need no
+ * `#if` guards (the arguments are not even evaluated). Included last, so the
+ * runtime_t/team_t/thread_t types it references are already defined above.
+ */
+# if XKRT_SUPPORT_TOOLS && XKOMP_SUPPORT_OMPT
+#  include <xkomp/ompt.h>
+# else
+#  define XKOMP_OMPT_EMIT(call) do {} while (0)
+# endif
+
 # endif /* __XKOMP_H__ */

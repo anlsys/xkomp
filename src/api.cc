@@ -16,6 +16,9 @@ xkomp_get(void)
         assert(xkomp);
         new (&xkomp->formats.kmp.per_loc) std::unordered_map<void *, task_format_id_t>();
         xkomp->formats.kmp.per_loc_lock = SPINLOCK_INITIALIZER;
+        // register the OMPT bridge before init(), so runtime.init() discovers
+        // and activates the OMPT tool (no-op if OMPT support is disabled)
+        XKOMP_OMPT_EMIT(connect(&xkomp->runtime));
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
