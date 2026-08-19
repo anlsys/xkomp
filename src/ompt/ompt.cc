@@ -186,6 +186,7 @@ on_task_schedule(runtime_t * runtime, thread_t * thread, task_t * prev, task_t *
 {
     (void) runtime; (void) thread;
 
+    // TODO: prev/next status
     OMPT_CALL(ompt_callback_task_schedule, ompt_callback_task_schedule_t,
               prev ? OMPT_DATA(&prev->tool_data) : NULL,
               ompt_task_switch,
@@ -197,8 +198,9 @@ on_task_complete(runtime_t * runtime, task_t * task)
 {
     (void) runtime;
 
-    OMPT_CALL(ompt_callback_task_schedule, ompt_callback_task_schedule_t,
-              OMPT_DATA(&task->tool_data), ompt_task_complete, NULL);
+    // TODO: not appropriate
+    // OMPT_CALL(ompt_callback_task_schedule, ompt_callback_task_schedule_t,
+    //           OMPT_DATA(&task->tool_data), ompt_task_complete, NULL);
 }
 
 static ompt_dependence_type_t
