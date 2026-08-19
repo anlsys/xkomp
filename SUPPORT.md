@@ -13,13 +13,15 @@ One should refer to the implementation itself to determine actual support of a s
 | ✅ | Data-sharing (`firstprivate`, `private`, `shared`, etc.) | Mostly managed by base compilers |
 | ✅ | `barrier` construct | |
 | ✅ | `master` / `masked` constructs | `masked` supports the `filter` clause |
-| ⚠️ | `single` construct | Including `nowait`; missing `copyprivate` |
 | ✅ | `omp_get_thread_num`, `omp_get_num_threads`, `omp_get_max_threads` | |
+| ✅ | `taskgroup` | Deep-sync of the task subtree (XKRT-native); `task_reduction`/`allocate` clauses and `cancel` not yet supported |
 | ✅ | `omp_get_default_device`, `omp_get_num_devices`, `omp_get_initial_device`, `omp_get_device_num`, `omp_is_initial_device` | |
 | ✅ | `omp_get_wtime` | |
 | ✅ | `OMP_NUM_THREADS`, `OMP_THREAD_LIMIT` | |
 | ✅ | `OMP_DISPLAY_ENV` | |
 | 🧪 | `taskgraph` construct | The `nogroup` clause is not supported efficiently |
+| ⚠️ | `single` construct | Including `nowait`; missing `copyprivate` |
+| ⚠️ | OMPT | Work in progress, built on top of XKRT-T |
 | ⚠️ | `task` construct | Supports `if` (undeferred `if(0)`), `depend`, `final`-agnostic; missing the `transparent` clause |
 | ⚠️ | `parallel` construct | `num_threads` clause is supported |
 | ⚠️ | `for` construct | Only supporting static schedule |
@@ -30,7 +32,6 @@ One should refer to the implementation itself to determine actual support of a s
 | ❌ | `OMP_SCHEDULE` | |
 | ❌ | `OMP_DISPLAY_AFFINITY` | |
 | ❌ | `taskloop` | |
-| ✅ | `taskgroup` | Deep-sync of the task subtree (XKRT-native); `task_reduction`/`allocate` clauses and `cancel` not yet supported |
 | ❌ | Allocators | |
 | ❌ | OMPT | |
 | ❌ | OMPD | |
