@@ -10,5 +10,5 @@
 1. large team of threads: currently XKRT uses 1 futex per team of thread. Waking up a team leads to a O(n) syscall -- with "n" the number of threads. While it is fine for small teams (1-16 threads) it is not optimal for large teams (>16 threads). Instead: use multiple futexes and wakeup in parallel
 1. KMP ABI: verify and fix compatibility
 1. GOMP ABI: implement it
-1. OMPT: add support for it. Likely, add a tooling interface in XKRT, and implement OMPT on top of it
+1. OMPT: has mostly boilerplate, but needs to be more precisely implement so it matches rigourously the spec.
 1. Remove dependency to libomptarget -> move its logic to xkomp
