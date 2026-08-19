@@ -12,4 +12,3 @@
 1. GOMP ABI: implement it
 1. OMPT: add support for it. Likely, add a tooling interface in XKRT, and implement OMPT on top of it
 1. Remove dependency to libomptarget -> move its logic to xkomp
-1. Port `src/kmp/arch/z_Linux_asm.S` to ARM
