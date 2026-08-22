@@ -288,6 +288,9 @@ get_or_create_loc_format(
             src->content.llvmir.raw            = ir;
             src->content.llvmir.size           = ir_size;
             src->content.llvmir._owned         = false;
+            // entry name (compile-time global): the JIT resolves the closure entry
+            // by it rather than guessing (host closures may hold several defs)
+            src->content.llvmir.symbol         = jit_desc->entry_name;
             src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) jit_desc->externs;
             src->content.llvmir.externs_count  = jit_desc->externs_count;
             src->content.llvmir._externs_owned = false;

@@ -140,6 +140,7 @@ typedef struct kmp_task_jit_desc_t
     const void * params;         /* per-parameter descriptors (or NULL) */
     uint64_t     params_count;
     int64_t      proto;          /* entry ABI requested by -fopenmp-task-jit-type */
+    const char * entry_name;     /* closure entry function name (JIT resolves by it) */
 }               kmp_task_jit_desc_t;
 
 typedef void (*kmpc_micro)(kmp_int32 *global_tid, kmp_int32 *bound_tid, ...);
