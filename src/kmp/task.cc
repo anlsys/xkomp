@@ -241,15 +241,14 @@ static inline task_format_id_t
 get_or_create_loc_format(
     xkomp_t * xkomp,
     ident_t * loc_ref,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
-    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
-    size_t ir_params_count, // number of entries in ir_params
-    void * scatter,         // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
-    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer (-fopenmp-task-jit-type)
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (compile-time global) or NULL
+    void * scatter                          // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
 ) {
+    // the forwarded task body IR + its resolution tables + ABI, or {NULL,0,...}
+    // when no IR was forwarded (e.g. -fopenmp-task-jit-type=none)
+    void * ir      = jit_desc ? (void *) jit_desc->ir : NULL;
+    size_t ir_size = jit_desc ? jit_desc->ir_size      : 0;
+
     // no per-construct key at all: fall back to the shared template format
     if (loc_ref == NULL && (ir == NULL || ir_size == 0))
         return xkomp->formats.kmp.host;
@@ -289,22 +288,22 @@ get_or_create_loc_format(
             src->content.llvmir.raw            = ir;
             src->content.llvmir.size           = ir_size;
             src->content.llvmir._owned         = false;
-            src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) ir_externs;
-            src->content.llvmir.externs_count  = ir_externs_count;
+            src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) jit_desc->externs;
+            src->content.llvmir.externs_count  = jit_desc->externs_count;
             src->content.llvmir._externs_owned = false;
             // Parameter descriptors + entry prototype: an unpacked task body exposes
             // one value parameter per capture (the fusion unit); a packed body has
             // a single void** args block (args[0] == kmp_task_t*).
-            // -fopenmp-task-jit-type=packed (jit_proto==2) requests a packed-buffer
+            // -fopenmp-task-jit-type=packed (jit_desc->proto==2) requests a packed-buffer
             // fused program; otherwise an unpacked (individual-param) body has a
             // scatter, and a packed-args-block (args[0]==tt) proxy has none.
             src->content.llvmir.proto          =
-                (jit_proto == (int) CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER)
+                (jit_desc->proto == (int) CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER)
                     ? CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER
                 : scatter ? CGIR_COMMAND_PROG_SOURCE_PROTO_UNPACKED_PARAMS
                           : CGIR_COMMAND_PROG_SOURCE_PROTO_VOID_PTRPTR;
-            src->content.llvmir.params         = (const cgir_command_prog_param_t *) ir_params;
-            src->content.llvmir.param_count    = ir_params_count;
+            src->content.llvmir.params         = (const cgir_command_prog_param_t *) jit_desc->params;
+            src->content.llvmir.param_count    = jit_desc->params_count;
             src->content.llvmir._params_owned  = false;
         }
 
@@ -327,15 +326,9 @@ task_alloc(
     kmp_int32 ndeps,
     kmp_int32 nacs,
     kmp_int32 device_id,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (compile-time global) or NULL
     size_t n_args,          // number of &value slots the routine consumes
-    void * scatter,         // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
-    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
-    size_t ir_params_count, // number of entries in ir_params
-    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer
+    void * scatter          // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -379,7 +372,7 @@ task_alloc(
 
     // resolve the per-source-location task format (carries the LLVM-IR + the
     // externalized-global address table)
-    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count, ir_params, ir_params_count, scatter, jit_proto);
+    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, jit_desc, scatter);
 
     // Layout of the args region (see task_args_t):
     //   [task_args_t] [kmp_task_t + shareds (rounded)] [n_kargs void* slots]
@@ -467,18 +460,12 @@ __kmpc_omp_task_alloc_with_deps(
     kmp_routine_entry_t task_entry,
     kmp_int32 ndeps,
     kmp_int32 nacs,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (or NULL)
     size_t n_args,
-    void * scatter,
-    void * ir_params,
-    size_t ir_params_count,
-    int    jit_proto
+    void * scatter
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
 }
 
 extern "C"
@@ -493,22 +480,16 @@ __kmpc_omp_target_task_alloc_with_deps(
     kmp_int64 device_id,
     kmp_int32 ndeps,
     kmp_int32 nacs,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (or NULL)
     size_t n_args,
-    void * scatter,
-    void * ir_params,
-    size_t ir_params_count,
-    int    jit_proto
+    void * scatter
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
 
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
 }
 
 // Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
@@ -532,16 +513,10 @@ __kmpc_omp_target_task_alloc(
     flags.tiedness = TASK_UNTIED;   // target tasks are untied per the spec
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
-    constexpr void * ir = NULL;
-    constexpr size_t ir_size = 0;
-    constexpr void * ir_externs = NULL;
-    constexpr size_t ir_externs_count = 0;
+    constexpr kmp_task_jit_desc_t * jit_desc = NULL;   // stock ABI forwards no IR
     constexpr size_t n_args = 1;
     constexpr void * scatter = NULL;
-    constexpr void * ir_params = NULL;
-    constexpr size_t ir_params_count = 0;
-    constexpr int jit_proto = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -563,17 +538,11 @@ __kmpc_omp_task_alloc(
                 "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
-    constexpr void * ir = NULL;
-    constexpr size_t ir_size = 0;
-    constexpr void * ir_externs = NULL;
-    constexpr size_t ir_externs_count = 0;
+    constexpr kmp_task_jit_desc_t * jit_desc = NULL;   // stock ABI forwards no IR
     constexpr size_t n_args = 1;
     constexpr void * scatter = NULL;
-    constexpr void * ir_params = NULL;
-    constexpr size_t ir_params_count = 0;
-    constexpr int jit_proto = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
