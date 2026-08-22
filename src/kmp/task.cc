@@ -25,9 +25,11 @@ typedef struct  task_args_t
      *    as an unpacked kernel `void .omp_task_kernel.(v0, v1, ...)`.
      *    Exposing each captured value as its own slot is what lets prog-fuse
      *    deduplicate/align them across consecutive task bodies and fuse their
-     *    loops. The slots are filled once by the scatter helper (at allocation)
-     *    and point into the frozen privates area of THIS allocation, so a
-     *    recorded taskgraph replays correctly.
+     *    loops. The slots are filled once by the scatter helper -- deferred to
+     *    record time (see body_omp_task), when the captures are live: SHARED_PTR
+     *    slots load a value from `shareds`, which the caller populates only AFTER
+     *    task alloc returns. They point into the frozen data environment of THIS
+     *    allocation, so a recorded taskgraph replays correctly.
      *
      *  - Packed form: `kargs` holds a single slot, kargs[0] == the task's
      *    kmp_task_t*; the packed kernel `void .omp_task_kernel.(void**)` reads it
@@ -40,6 +42,11 @@ typedef struct  task_args_t
      * the kmp_task_t offset (see ktask_from_task) is independent of n_kargs. */
     void ** kargs;
     size_t  n_kargs;
+
+    /* Compiler-emitted scatter (kmp_task_scatter_t) that fills `kargs`, stashed at
+     * alloc and run at record time (see body_omp_task); NULL for the packed
+     * void(void**) form (kargs[0] == tt, filled at alloc). */
+    void *  scatter;
 
     // followed by the kmp task, its shareds, then the kargs slots
 }               task_args_t;
@@ -199,6 +206,14 @@ body_omp_task(
         kmp_task_t * ktask = ktask_from_task(task);
         assert(ktask);
         assert(ktask->routine);
+
+        /* Fill kargs now, with the captures live (the body ran just above, so
+         * `shareds`/privates are populated). Deferred from task alloc because a
+         * SHARED_PTR slot loads a pointer out of `shareds`, which is empty at alloc
+         * time. Runs once per recorded task; the slots feed prog-fuse/jit. */
+        task_args_t * args = (task_args_t *) TASK_ARGS(task);
+        if (args->scatter)
+            ((kmp_task_scatter_t) args->scatter)(ktask, args->kargs);
 
         task_command_record_t * cmdrec = rec->commands.put();
         constexpr cgir::command_type_t ctype = cgir::COMMAND_TYPE_PROG;
@@ -428,14 +443,15 @@ task_alloc(
     // the kargs slots sit just past the kmp_task_t + shareds block
     args->kargs   = (void **) (((char *) ktask) + kmp_block);
     args->n_kargs = n_args;
+    args->scatter = scatter;
 
     if (scatter)
     {
-        /* Unpacked form: let the compiler-emitted scatter fill kargs[k] with the
-         * address of the k-th captured value. It records only ADDRESSES (into
-         * this allocation's privates area), which are valid now even though the
-         * values are copied in later by the caller -- and stable for replay. */
-        ((kmp_task_scatter_t) scatter)(ktask, args->kargs);
+        /* Unpacked form: the compiler-emitted scatter fills kargs[k] for the k-th
+         * capture. Deferred to record time (body_omp_task), NOT run here: a
+         * SHARED_PTR slot loads a pointer from `shareds`, which the caller copies
+         * in only after this alloc returns -- reading it now yields garbage. By
+         * record time the captures are live and the slots are stable for replay. */
     }
     else
     {
