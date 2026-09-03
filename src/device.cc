@@ -62,7 +62,10 @@ extern "C"
 void *
 xkomp_target_alloc(size_t size, int device_num)
 {
-   return NULL;
+    xkomp_t * xkomp = xkomp_get();
+    const device_unique_id_t device_unique_id = omp_device_id_to_xkomp(device_num);
+    area_chunk_t * chunk = xkomp->runtime.memory_device_allocate(device_unique_id, size);
+    return (void *) chunk->ptr;
 }
 EXPORT_OMP_ABI(target_alloc);
 
@@ -70,9 +73,24 @@ extern "C"
 void
 xkomp_target_free(void * device_ptr, int device_num)
 {
+    LOGGER_WARN("TODO: xkomp_target_free not implemented, is a noop right now");
 }
 EXPORT_OMP_ABI(target_free);
 
+extern "C"
+int
+xkomp_target_memcpy(
+    void * dst,
+    const void * src,
+    size_t length,
+    size_t dst_offset,
+    size_t src_offset,
+    int dst_device_num,
+    int src_device_num
+) {
+    LOGGER_FATAL("TODO");
+    return 0;
+}
 
 /////////////////////////////
 // TARGET MEMORY TRANSFERS //
