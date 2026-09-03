@@ -89,7 +89,7 @@ xkomp_target_memcpy(
     int src_device_num
 ) {
     LOGGER_FATAL("TODO");
-    return 0;
+    return -1;
 }
 
 /////////////////////////////
