@@ -88,9 +88,17 @@ xkomp_target_memcpy(
     int dst_device_num,
     int src_device_num
 ) {
-    LOGGER_FATAL("TODO");
-    return -1;
+    xkomp_t * xkomp = xkomp_get();
+
+    const size_t size = length;
+    const device_unique_id_t dst_device_unique_id = omp_device_id_to_xkomp(dst_device_num);
+    const device_unique_id_t src_device_unique_id = omp_device_id_to_xkomp(src_device_num);
+    const uintptr_t          dst_device_addr      = ((uintptr_t) dst) + dst_offset;
+    const uintptr_t          src_device_addr      = ((uintptr_t) src) + src_offset;
+    xkomp->runtime.memory_copy(size, dst_device_unique_id, dst_device_addr, src_device_unique_id, src_device_addr);
+    return 0;
 }
+EXPORT_OMP_ABI(target_memcpy);
 
 /////////////////////////////
 // TARGET MEMORY TRANSFERS //
