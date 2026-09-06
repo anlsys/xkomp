@@ -49,9 +49,11 @@ xkomp_env_init_parse(
  *      - unset      -> default trio (reduce-node, transitive-reduction, sequence)
  *      - empty ""   -> no passes (equivalent to "none")
  *      - "none"     -> no passes
- *      - otherwise  -> the named passes; unknown names are warned and ignored
+ *      - otherwise  -> the named passes; an unknown name is FATAL
  *  Accepted names are the cgir pass names (see command_graph_pass_to_str):
  *  "copy-fuse", "reduce-node", "transitive-reduction", "prog-fuse", "jit", "sequence", "batch".
+ *
+ *  An unknown name aborts.
  */
 static cgir::command_graph_pass_set_t
 xkomp_env_init_parse_taskgraph_opt(void)
@@ -69,7 +71,12 @@ xkomp_env_init_parse_taskgraph_opt(void)
     // set (possibly empty) -> parse tokens; an empty string yields no tokens == "none"
     cgir::command_graph_pass_set_t passes = 0;
     char * dup = strdup(value);
-    for (char * tok = strtok(dup, ", \t") ; tok != NULL ; tok = strtok(NULL, ", \t"))
+    // Newline and carriage return are separators too: a value assembled by a
+    // script can pick one up (a shell line continuation inside single quotes is
+    // a literal backslash-newline), and treating it as part of the token turns a
+    // valid pass name into an unknown one.
+    static const char * const SEPARATORS = ", \t\n\r";
+    for (char * tok = strtok(dup, SEPARATORS) ; tok != NULL ; tok = strtok(NULL, SEPARATORS))
     {
         if (strcmp(tok, "none") == 0)
             continue;
@@ -78,8 +85,8 @@ xkomp_env_init_parse_taskgraph_opt(void)
         if (pass == cgir::COMMAND_GRAPH_PASS_MAX)
             // command_graph_pass_names() ends with a trailing ", ", so "none"
             // appends cleanly as the final accepted value
-            LOGGER_WARN("OMP_TASKGRAPH_OPT: unknown optimization pass '%s' (ignored). Available passes: %snone",
-                        tok, cgir::command_graph_pass_names());
+            LOGGER_FATAL("OMP_TASKGRAPH_OPT: unknown optimization pass '%s'. Available passes: %snone",
+                         tok, cgir::command_graph_pass_names());
         else
             passes |= cgir::command_graph_pass_bit(pass);
     }
@@ -90,9 +97,9 @@ xkomp_env_init_parse_taskgraph_opt(void)
     // run-time.
     if ((passes & cgir::COMMAND_GRAPH_PASS_PROG_FUSE_BIT) &&
        !(passes & cgir::COMMAND_GRAPH_PASS_JIT_BIT))
-        LOGGER_WARN("OMP_TASKGRAPH_OPT: 'prog-fuse' is enabled without 'jit'; "
-                    "fused programs will not be compiled and will abort at "
-                    "run-time. Add 'jit' to OMP_TASKGRAPH_OPT.");
+        LOGGER_FATAL("OMP_TASKGRAPH_OPT: 'prog-fuse' is enabled without 'jit'; "
+                     "fused programs would not be compiled and would abort at "
+                     "run-time. Add 'jit' to OMP_TASKGRAPH_OPT.");
 
     return passes;
 }
