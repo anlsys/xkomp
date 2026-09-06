@@ -40,17 +40,10 @@ extern "C"
     DECLARE_OMP_ABI(int,  is_initial_device, void);
 
     // target memory
-    DECLARE_OMP_ABI(int, xkomp_target_memcpy_async,
-        void *dst,
-        const void *src,
-        size_t length,
-        size_t dst_offset,
-        size_t src_offset,
-        int dst_device_num,
-        int src_device_num,
-        int depobj_count,
-        omp_depend_t *depobj_list
-    );
+    DECLARE_OMP_ABI(void *, target_alloc, size_t size, int device_num);
+    DECLARE_OMP_ABI(void, target_free, void *device_ptr, int device_num);
+    DECLARE_OMP_ABI(int, target_memcpy,       void * dst, const void * src, size_t length, size_t dst_offset, size_t src_offset, int dst_device_num, int src_device_num);
+    DECLARE_OMP_ABI(int, target_memcpy_async, void * dst, const void * src, size_t length, size_t dst_offset, size_t src_offset, int dst_device_num, int src_device_num, int depobj_count, omp_depend_t *depobj_list);
 
     // TODO: currently in libomptarget, should be moved to xkomp
     void * omp_get_mapped_ptr(const void * ptr, int device_num);
