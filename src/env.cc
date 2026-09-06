@@ -51,7 +51,7 @@ xkomp_env_init_parse(
  *      - "none"     -> no passes
  *      - otherwise  -> the named passes; unknown names are warned and ignored
  *  Accepted names are the cgir pass names (see command_graph_pass_to_str):
- *  "copy-normalize", "copy-fuse", "reduce-node", "transitive-reduction", "jit", "prog-fuse", "sequence", "batch".
+ *  "copy-fuse", "reduce-node", "transitive-reduction", "prog-fuse", "jit", "sequence", "batch".
  */
 static cgir::command_graph_pass_set_t
 xkomp_env_init_parse_taskgraph_opt(void)
