@@ -1,16 +1,39 @@
 KMP_VERSION {
     global:
+
+        omp_get_thread_num;
+        omp_get_num_threads;
+        omp_get_max_threads;
+        omp_set_default_device;
+        omp_get_default_device;
+        omp_get_num_devices;
+        omp_get_device_num;
+        omp_get_initial_device;
+        omp_is_initial_device;
+        omp_get_wtime;
+        omp_target_memcpy_async;
+
+        __kmpc_alloc;
+        __kmpc_free;
         __kmpc_global_thread_num;
         __kmpc_omp_task_alloc;
         __kmpc_omp_task_alloc_with_deps;
+        __kmpc_omp_taskyield;
+        __kmpc_omp_taskwait_deps_51;
+        __kmpc_omp_taskwait_deps_51_v2;
+        __kmpc_taskgroup;
+        __kmpc_end_taskgroup;
         __kmpc_omp_target_task_alloc;
         __kmpc_omp_target_task_alloc_with_deps;
         __kmpc_omp_task;
         __kmpc_omp_task_with_deps;
+        __kmpc_omp_task_with_deps_v2;
         __kmpc_omp_taskwait;
         __kmpc_fork_call;
         __kmpc_for_static_init_4;
+        __kmpc_for_static_init_4u;
         __kmpc_for_static_init_8;
+        __kmpc_for_static_init_8u;
         __kmpc_for_static_fini;
         __kmpc_barrier;
         __kmpc_push_num_threads;
@@ -18,9 +41,15 @@ KMP_VERSION {
         __kmpc_end_single;
         __kmpc_master;
         __kmpc_end_master;
+        __kmpc_masked;
+        __kmpc_end_masked;
         __kmpc_fork_teams;
         __kmpc_get_target_offload;
         __kmpc_omp_has_task_team;
+        __kmpc_omp_taskwait_deps_51_v2;
+        __kmpc_omp_wait_deps;
+        __kmpc_omp_get_target_async_handle_ptr;
+        __kmp_omp_target_memcpy_async;
 
     local:
         *;

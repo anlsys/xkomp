@@ -1,3 +1,4 @@
+# include <omp.h>
 # include <xkomp/xkomp.h>
 # include <assert.h>
 
@@ -6,61 +7,103 @@
 
 extern "C"
 void
-omp_set_default_device(int device)
+xkomp_set_default_device(int device)
 {
     LOGGER_NOT_IMPLEMENTED();
 }
+EXPORT_OMP_ABI(set_default_device);
 
 extern "C"
 int
-omp_get_default_device(void)
+xkomp_get_default_device(void)
 {
     return 0;
 }
+EXPORT_OMP_ABI(get_default_device);
 
 extern "C"
 int
-omp_get_num_devices(void)
+xkomp_get_num_devices(void)
 {
     xkomp_t * xkomp = xkomp_get();
     return xkomp->runtime.get_ndevices();
 }
+EXPORT_OMP_ABI(get_num_devices);
+
+extern "C"
+int xkomp_get_initial_device(void);
 
 extern "C"
 int omp_get_initial_device(void);
 
 extern "C"
 int
-omp_get_device_num(void)
+xkomp_get_device_num(void)
 {
     thread_t * thread = thread_t::get_tls();
+<<<<<<< HEAD
     return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? omp_get_initial_device() : thread->device_unique_id - 1);
+=======
+    return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? xkomp_get_initial_device() : thread->device_unique_id - 1);
 }
+EXPORT_OMP_ABI(get_device_num);
 
 extern "C"
 int
-omp_get_initial_device(void)
+xkomp_get_initial_device(void)
 {
-    return omp_get_num_devices();
+    return xkomp_get_num_devices();
 }
+EXPORT_OMP_ABI(get_initial_device);
 
 extern "C"
 int
-omp_is_initial_device(void)
+xkomp_is_initial_device(void)
 {
-    return omp_get_device_num() == omp_get_initial_device();
+    return xkomp_get_device_num() == xkomp_get_initial_device();
 }
+EXPORT_OMP_ABI(is_initial_device);
+
+/////////////////////////////
+// TARGET MEMORY TRANSFERS //
+/////////////////////////////
+
+extern "C"
+int
+xkomp_target_memcpy_async(
+    void * dst,
+    const void * src,
+    size_t length,
+    size_t dst_offset,
+    size_t src_offset,
+    int dst_device_num,
+    int src_device_num,
+    int depobj_count,
+    omp_depend_t * depobj_list
+) {
+    LOGGER_FATAL("Not implemented");
+    return -1;
+>>>>>>> e7c7bdaee31cfbc1ef98416bc352d4d72b91da3d
+}
+EXPORT_OMP_ABI(target_memcpy_async);
+
+/////////////////////
+// XKOMP EXTENSION //
+/////////////////////
 
 extern "C"
 xkrt_device_unique_id_t
 omp_device_id_to_xkomp(int device_id)
 {
-    return (device_id + 1) % omp_get_num_devices();
+    static_assert(XKRT_HOST_DEVICE_UNIQUE_ID == 0);
+    if (device_id == xkomp_get_initial_device())
+        return XKRT_HOST_DEVICE_UNIQUE_ID;
+    return 1 + (device_id % xkomp_get_num_devices());
 }
 
 extern "C"
 int
 xkomp_device_unique_id_to_omp(xkrt_device_unique_id_t device_unique_id)
 {
-    return (device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID) ? omp_get_num_devices() : (int) (device_unique_id - 1);
+    return (device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID) ? xkomp_get_num_devices() : (int) (device_unique_id - 1);
 }

@@ -13,9 +13,20 @@ project(${XKOMP} C CXX ASM)
 
 include(BooleanUtils)
 xkoption(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
+
+# Default microtask backend follows the host ISA: aarch64 -> ARM asm, else x86 asm.
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(_XK_MT_INTEL_DEFAULT OFF)
+    set(_XK_MT_ARM_DEFAULT   ON)
+else()
+    set(_XK_MT_INTEL_DEFAULT ON)
+    set(_XK_MT_ARM_DEFAULT   OFF)
+endif()
+
 xkoption(SUPPORT_MICROTASK_GENERIC "Use generic implem for kmp microtasks (limited in number of arguments)." OFF)
 xkoption(SUPPORT_MICROTASK_LIBFFI "Use libffi for kmp microtasks (experimental)." OFF)
-xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86 implementation for kmp microtasks." ON)
+xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86_64 implementation for kmp microtasks." ${_XK_MT_INTEL_DEFAULT})
+xkoption(SUPPORT_MICROTASK_ARM "Use ARM aarch64 implementation for kmp microtasks." ${_XK_MT_ARM_DEFAULT})
 
 ###############
 # C++ version #
@@ -41,8 +52,10 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/gomp/parallel.cc
 
     # KMP
+    ${CMAKE_SOURCE_DIR}/src/kmp/allocator.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/barrier.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/for.cc
+    ${CMAKE_SOURCE_DIR}/src/kmp/formats.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/fork.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/master.cc
     ${CMAKE_SOURCE_DIR}/src/kmp/single.cc
@@ -78,9 +91,14 @@ if (SUPPORT_MICROTASK_INTEL)
     math(EXPR enabled_count "${enabled_count} + 1")
 endif()
 
+if (SUPPORT_MICROTASK_ARM)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/arch/aarch64.S)
+    add_compile_definitions(KMP_ARCH_AARCH64=1)
+    math(EXPR enabled_count "${enabled_count} + 1")
+endif()
+
 if(NOT enabled_count EQUAL 1)
-    message(FATAL_ERROR "Invalid configuration: Exactly one of  56 if (SUPPORT_MICROTASK_GENERIC)
-, SUPPORT_MICROTASK_LIBFFI, or SUPPORT_MICROTASK_INTEL must be ON. Currently, ${enabled_count} are enabled.")
+    message(FATAL_ERROR "Invalid configuration: Exactly one of SUPPORT_MICROTASK_GENERIC, SUPPORT_MICROTASK_LIBFFI, SUPPORT_MICROTASK_INTEL, or SUPPORT_MICROTASK_ARM must be ON. Currently, ${enabled_count} are enabled.")
 endif()
 
 # XKOMP Lib
@@ -99,10 +117,16 @@ add_library(${XKOMP} SHARED ${SOURCE_FILES})
 
 # flags
 if(UNIX AND NOT APPLE)
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/gomp/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/kmp/abi.map")
-    target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/src/xkomp/abi.map")
+    set(ABI_MAP_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/gomp/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/kmp/abi.map"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/xkomp/abi.map"
+    )
+    foreach(map_file ${ABI_MAP_FILES})
+        target_link_options(${XKOMP} PRIVATE "-Wl,--version-script=${map_file}")
+    endforeach()
+    set_target_properties(${XKOMP} PROPERTIES LINK_DEPENDS "${ABI_MAP_FILES}")
 endif()
 
 # Include directory
@@ -178,8 +202,16 @@ install(FILES
     DESTINATION lib/cmake/XKOMP
 )
 
+# Installation - xkcc
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/xkcc.in  ${CMAKE_CURRENT_BINARY_DIR}/xkcc  @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/xkcxx.in ${CMAKE_CURRENT_BINARY_DIR}/xkcxx @ONLY)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/xkcc  DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/xkcxx DESTINATION bin)
+
 ################
 # Sub projects #
 ################
-add_subdirectory(tests/)
-enable_testing()
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    add_subdirectory(tests/)
+    enable_testing()
+endif()

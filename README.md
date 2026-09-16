@@ -1,10 +1,10 @@
 # XKOMP
 An experimental OpenMP runtime-library implementation built on top of the XKaapi runtime system, and an extended LLVM's Clang ABI.
 
-# Prerequisities
+# Installation
 You must have an installation of
-- [XKRT](https://github.com/rpereira-dev/xkrt)
-- [patched LLVM](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
+- [XKRT](https://gitlab.inria.fr/xkaapi/dev-v2)
+- [LLVM(ANL)](https://github.com/anlsys/llvm-project) - and compile your openmp program with it
 
 Example of LLVM build
 ```
@@ -18,8 +18,12 @@ cmake -DCMAKE_BUILD_TYPE=Debug ../
 
 Example of application build
 ```
-clang -fopenmp main.c -o main -lxkomp
+xkcc main.c -o main
 ```
+
+# Remarks
+- Pass `-fopenmp-task-jit-type=[pointers|packed]` to `xkcxx` so that the LLVM-IR/PTX of tasks/targets is kept after compile-time, and passed to the XKOMP runtime for JIT during taskgraph optimizations. With `pointers`, all arguments (firstprivate, shared, etc.) are stored in a `void ** args` array, referenced within the outlined region. With `packed`, they are packed in a `void * args, size_t size` compact structure.
+- The `OMP_TASKGRAPH_OPT=opt1,opt2,...,optn` can be used to enable `taskgraph` optimizations. Available optimizations are: `reduce-edge`, `reduce-node`, `batch`, `prog-fuse`, `jit`, `copy-normalize`, `copy-fuse`, `sequence`
 
 # Bits of history
 XKRT is a fork of XKaapi, that it extended with support for task dependencies over intersecting regions of memory (https://gitlab.inria.fr/xkaapi/dev-v2)

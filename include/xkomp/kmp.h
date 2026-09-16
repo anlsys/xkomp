@@ -95,7 +95,22 @@ typedef struct ident {
   }
 } ident_t;
 
-typedef kmp_int32 (*kmp_routine_entry_t)(kmp_int32, void *);
+/*
+ * XKOMP task-body ABI.
+ *
+ * `kmp_task->routine` is the standard libomp task routine
+ * `kmp_int32 (*)(kmp_int32 gtid, kmp_task_t *)` (the compiler's ahead-of-time
+ * `.omp_task_entry.` proxy). It is what runs a task body directly / on non-JIT
+ * taskgraph replay, and keeps XKOMP ABI-compatible with libomp/libomptarget.
+ *
+ * For JIT / prog-fuse, the compiler ALSO forwards the body as a uniform
+ * `void(void**)` program (a "packed" kernel reading args[0]==kmp_task_t*, or an
+ * "unpacked" kernel taking one deduplicable &value slot per captured
+ * scalar) via the task format's LLVM-IR; see get_or_create_loc_format() and the
+ * CGIR command prototypes (command_prog_function_prototype_t). The runtime picks
+ * the KMP routine or the JIT'd void(void**) program at launch time.
+ */
+typedef kmp_int32 (*kmp_routine_entry_t)(kmp_int32 /* gtid */, void * /* kmp_task_t */);
 
 typedef union kmp_cmplrdata {
   kmp_int32 priority; /**< priority specified by user for the task */
@@ -207,7 +222,9 @@ typedef struct kmp_tasking_flags { /* Total struct must be exactly 32 bits */
                                       setting for the task */
   unsigned detachable : 1;         /* 1 == can detach */
   unsigned hidden_helper : 1;      /* 1 == hidden helper task */
-  unsigned reserved : 8;           /* reserved for compiler use */
+  unsigned reserved8 : 1;          /* bit 8 (transparent, compiler-managed) */
+  unsigned undeferred : 1;         /* bit 9 == 1 if the task is undeferred (XKOMP: `if(0)`) */
+  unsigned reserved : 6;           /* reserved for compiler use */
 
   /* Library flags */       /* Total library flags must be 16 bits */
   unsigned tasktype : 1;    /* task is either explicit(1) or implicit (0) */
@@ -239,5 +256,45 @@ typedef struct kmp_depend_info {
       bool all : 1;
   } flags;
 } kmp_depend_info_t;
+
+/* Extensions */
+
+typedef struct kmp_access_info {
+    intptr_t base_addr;
+    size_t   len;
+    struct {
+        bool read               : 1;
+        bool write              : 1;
+        bool storage            : 1;
+        bool nostorage          : 1;
+        bool noncoherent        : 1;
+        bool concurrentwrite    : 1;
+        bool unused             : 2;
+    } flags;
+} kmp_access_info_t;
+
+# ifdef __cplusplus
+extern "C" {
+# endif /* __cplusplus */
+
+int __kmp_invoke_microtask(
+    void (*pkfn) (int * global_tid, int * bound_tid, ...),
+    int gtid, int npr, int argc, void *argv[] );
+
+int __kmp_omp_target_memcpy_async(
+    void * dst_ptr,
+    const void * src_ptr,
+    size_t length,
+    size_t dst_offset,
+    size_t src_offset,
+    int dst_device_num,
+    int src_device_num,
+    int depobj_count,
+    void * depobj_list
+);
+
+# ifdef __cplusplus
+};
+# endif /* __cplusplus */
 
 #endif /* __KMP_H__ */
