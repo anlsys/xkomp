@@ -1,11 +1,11 @@
 #ifndef __XKOMP_H__
 # define __XKOMP_H__
 
+# include <omp.h>
 # include <xkrt/runtime.h>
 # include <xkrt/data-structures/small-vector.h>
 # include <xkrt/sync/spinlock.h>
 # include <xkomp/support.h>
-# include <xkomp/taskgraph.h>
 
 # include <map>
 # include <unordered_map>
@@ -52,6 +52,65 @@ typedef struct  xkomp_team_entry_t
     int nthreads;
     team_t team;
 }               xkomp_team_entry_t;
+
+/* graph_id type */
+typedef int xkomp_taskgraph_id_t;
+
+/* event handle */
+typedef omp_event_handle_t xkomp_event_handle_t;
+
+/*************
+ * TASKGRAPH *
+ *************/
+
+typedef enum    xkomp_taskgraph_flags_t
+{
+    XKOMP_TASKGRAPH_FLAG_NONE       = (0),
+    XKOMP_TASKGRAPH_FLAG_RESET      = (1 << 0),
+    XKOMP_TASKGRAPH_FLAG_IF         = (1 << 1),
+    XKOMP_TASKGRAPH_FLAG_NOGROUP    = (1 << 2)
+
+}               xkomp_taskgraph_flags_t;
+
+/* taskgraph internal structure */
+typedef struct  xkomp_taskgraph_t
+{
+    /* XKRT tdg */
+    task_dependency_graph_t tdg;
+
+    /* XKRT cg */
+    command_graph_t cg;
+
+    /* graph id */
+    xkomp_taskgraph_id_t id;
+
+    /* flags */
+    xkomp_taskgraph_flags_t flags;
+
+    /* Replay counter -- count the number of time the pragma is encoutered for that graph */
+    int rc;
+
+}               xkomp_taskgraph_t;
+
+/* a taskgraphloop */
+typedef struct  xkomp_taskgraphloop_t
+{
+    /* the associated taskgraph */
+    xkomp_taskgraph_t taskgraph;
+
+    /* while loop condition */
+    xkomp_event_handle_t handle;
+
+}               xkomp_taskgraphloop_t;
+
+//  # pragma omp taskgraph graph_id(int) graph_reset(bool) if(bool) nogroup
+extern "C"
+xkomp_taskgraph_t * xkomp_taskgraph_begin(int graph_id, xkomp_taskgraph_flags_t flags);
+
+extern "C"
+void xkomp_taskgraph_end(xkomp_taskgraph_t * taskgraph);
+
+
 
 /* max number of distinct thread counts cached at once. Teams are stored in-place
  * in the small vector, so this is its inline capacity: growing beyond it would
@@ -124,11 +183,17 @@ void xkomp_task_register_formats_kmp_target(xkomp_t * xkomp);
 extern "C"
 void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
 
-/* microtask max arguments */
-# define XKOMP_MICROTASK_MAX_ARGS 1024
-
-/* # pragma omp parallel */
-extern "C"
-void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
+/*
+ * OMPT bridge. When XKRT provides the tooling interface and XKOMP was built with
+ * OMPT support, pull in the bridge helpers together with the XKOMP_OMPT_EMIT()
+ * macro; otherwise define XKOMP_OMPT_EMIT() as a no-op so call sites need no
+ * `#if` guards (the arguments are not even evaluated). Included last, so the
+ * runtime_t/team_t/thread_t types it references are already defined above.
+ */
+# if XKRT_SUPPORT_TOOLS && XKOMP_SUPPORT_OMPT
+#  include <xkomp/ompt.h>
+# else
+#  define XKOMP_OMPT_EMIT(name, ...) do {} while (0)
+# endif
 
 # endif /* __XKOMP_H__ */

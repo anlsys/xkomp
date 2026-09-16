@@ -25,9 +25,11 @@ typedef struct  task_args_t
      *    as an unpacked kernel `void .omp_task_kernel.(v0, v1, ...)`.
      *    Exposing each captured value as its own slot is what lets prog-fuse
      *    deduplicate/align them across consecutive task bodies and fuse their
-     *    loops. The slots are filled once by the scatter helper (at allocation)
-     *    and point into the frozen privates area of THIS allocation, so a
-     *    recorded taskgraph replays correctly.
+     *    loops. The slots are filled once by the scatter helper -- deferred to
+     *    record time (see body_omp_task), when the captures are live: SHARED_PTR
+     *    slots load a value from `shareds`, which the caller populates only AFTER
+     *    task alloc returns. They point into the frozen data environment of THIS
+     *    allocation, so a recorded taskgraph replays correctly.
      *
      *  - Packed form: `kargs` holds a single slot, kargs[0] == the task's
      *    kmp_task_t*; the packed kernel `void .omp_task_kernel.(void**)` reads it
@@ -40,6 +42,11 @@ typedef struct  task_args_t
      * the kmp_task_t offset (see ktask_from_task) is independent of n_kargs. */
     void ** kargs;
     size_t  n_kargs;
+
+    /* Compiler-emitted scatter (kmp_task_scatter_t) that fills `kargs`, stashed at
+     * alloc and run at record time (see body_omp_task); NULL for the packed
+     * void(void**) form (kargs[0] == tt, filled at alloc). */
+    void *  scatter;
 
     // followed by the kmp task, its shareds, then the kargs slots
 }               task_args_t;
@@ -200,6 +207,14 @@ body_omp_task(
         assert(ktask);
         assert(ktask->routine);
 
+        /* Fill kargs now, with the captures live (the body ran just above, so
+         * `shareds`/privates are populated). Deferred from task alloc because a
+         * SHARED_PTR slot loads a pointer out of `shareds`, which is empty at alloc
+         * time. Runs once per recorded task; the slots feed prog-fuse/jit. */
+        task_args_t * args = (task_args_t *) TASK_ARGS(task);
+        if (args->scatter)
+            ((kmp_task_scatter_t) args->scatter)(ktask, args->kargs);
+
         task_command_record_t * cmdrec = rec->commands.put();
         constexpr cgir::command_type_t ctype = cgir::COMMAND_TYPE_PROG;
         constexpr command_flag_t flags = COMMAND_FLAG_SYNCHRONOUS | COMMAND_FLAG_SERIALIZED;
@@ -241,15 +256,14 @@ static inline task_format_id_t
 get_or_create_loc_format(
     xkomp_t * xkomp,
     ident_t * loc_ref,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
-    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
-    size_t ir_params_count, // number of entries in ir_params
-    void * scatter,         // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
-    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer (-fopenmp-task-jit-type)
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (compile-time global) or NULL
+    void * scatter                          // != NULL => unpacked (individual params); NULL => packed (args[0]==tt)
 ) {
+    // the forwarded task body IR + its resolution tables + ABI, or {NULL,0,...}
+    // when no IR was forwarded (e.g. -fopenmp-task-jit-abi=none)
+    void * ir      = jit_desc ? (void *) jit_desc->ir : NULL;
+    size_t ir_size = jit_desc ? jit_desc->ir_size      : 0;
+
     // no per-construct key at all: fall back to the shared template format
     if (loc_ref == NULL && (ir == NULL || ir_size == 0))
         return xkomp->formats.kmp.host;
@@ -289,22 +303,25 @@ get_or_create_loc_format(
             src->content.llvmir.raw            = ir;
             src->content.llvmir.size           = ir_size;
             src->content.llvmir._owned         = false;
-            src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) ir_externs;
-            src->content.llvmir.externs_count  = ir_externs_count;
+            // entry name (compile-time global): the JIT resolves the closure entry
+            // by it rather than guessing (host closures may hold several defs)
+            src->content.llvmir.symbol         = jit_desc->entry_name;
+            src->content.llvmir.externs        = (const cgir_command_prog_extern_t *) jit_desc->externs;
+            src->content.llvmir.externs_count  = jit_desc->externs_count;
             src->content.llvmir._externs_owned = false;
             // Parameter descriptors + entry prototype: an unpacked task body exposes
             // one value parameter per capture (the fusion unit); a packed body has
             // a single void** args block (args[0] == kmp_task_t*).
-            // -fopenmp-task-jit-type=packed (jit_proto==2) requests a packed-buffer
+            // -fopenmp-task-jit-abi=packed (jit_desc->proto==2) requests a packed-buffer
             // fused program; otherwise an unpacked (individual-param) body has a
             // scatter, and a packed-args-block (args[0]==tt) proxy has none.
             src->content.llvmir.proto          =
-                (jit_proto == (int) CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER)
+                (jit_desc->proto == (int) CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER)
                     ? CGIR_COMMAND_PROG_SOURCE_PROTO_PACKED_BUFFER
                 : scatter ? CGIR_COMMAND_PROG_SOURCE_PROTO_UNPACKED_PARAMS
                           : CGIR_COMMAND_PROG_SOURCE_PROTO_VOID_PTRPTR;
-            src->content.llvmir.params         = (const cgir_command_prog_param_t *) ir_params;
-            src->content.llvmir.param_count    = ir_params_count;
+            src->content.llvmir.params         = (const cgir_command_prog_param_t *) jit_desc->params;
+            src->content.llvmir.param_count    = jit_desc->params_count;
             src->content.llvmir._params_owned  = false;
         }
 
@@ -327,15 +344,9 @@ task_alloc(
     kmp_int32 ndeps,
     kmp_int32 nacs,
     kmp_int32 device_id,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (compile-time global) or NULL
     size_t n_args,          // number of &value slots the routine consumes
-    void * scatter,         // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
-    void * ir_params,       // per-parameter descriptor table (cgir_command_prog_param_t[]) or NULL
-    size_t ir_params_count, // number of entries in ir_params
-    int    jit_proto        // requested JIT ABI: 0 = pointers, 2 = packed buffer
+    void * scatter          // unpacked scatter (kmp_task_scatter_t) or NULL (packed)
 ) {
     if (device_id == -1)
         device_id = omp_get_default_device();
@@ -379,7 +390,7 @@ task_alloc(
 
     // resolve the per-source-location task format (carries the LLVM-IR + the
     // externalized-global address table)
-    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, ir, ir_size, ir_externs, ir_externs_count, ir_params, ir_params_count, scatter, jit_proto);
+    const task_format_id_t fmtid = get_or_create_loc_format(xkomp, loc_ref, jit_desc, scatter);
 
     // Layout of the args region (see task_args_t):
     //   [task_args_t] [kmp_task_t + shareds (rounded)] [n_kargs void* slots]
@@ -432,14 +443,15 @@ task_alloc(
     // the kargs slots sit just past the kmp_task_t + shareds block
     args->kargs   = (void **) (((char *) ktask) + kmp_block);
     args->n_kargs = n_args;
+    args->scatter = scatter;
 
     if (scatter)
     {
-        /* Unpacked form: let the compiler-emitted scatter fill kargs[k] with the
-         * address of the k-th captured value. It records only ADDRESSES (into
-         * this allocation's privates area), which are valid now even though the
-         * values are copied in later by the caller -- and stable for replay. */
-        ((kmp_task_scatter_t) scatter)(ktask, args->kargs);
+        /* Unpacked form: the compiler-emitted scatter fills kargs[k] for the k-th
+         * capture. Deferred to record time (body_omp_task), NOT run here: a
+         * SHARED_PTR slot loads a pointer from `shareds`, which the caller copies
+         * in only after this alloc returns -- reading it now yields garbage. By
+         * record time the captures are live and the slots are stable for replay. */
     }
     else
     {
@@ -467,18 +479,12 @@ __kmpc_omp_task_alloc_with_deps(
     kmp_routine_entry_t task_entry,
     kmp_int32 ndeps,
     kmp_int32 nacs,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (or NULL)
     size_t n_args,
-    void * scatter,
-    void * ir_params,
-    size_t ir_params_count,
-    int    jit_proto
+    void * scatter
 ) {
     const kmp_int32 device_id = omp_get_initial_device();
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
 }
 
 extern "C"
@@ -493,21 +499,15 @@ __kmpc_omp_target_task_alloc_with_deps(
     kmp_int64 device_id,
     kmp_int32 ndeps,
     kmp_int32 nacs,
-    void * ir,
-    size_t ir_size,
-    void * ir_externs,
-    size_t ir_externs_count,
+    const kmp_task_jit_desc_t * jit_desc,  // JIT source descriptor (or NULL)
     size_t n_args,
-    void * scatter,
-    void * ir_params,
-    size_t ir_params_count,
-    int    jit_proto
+    void * scatter
 ) {
     // target task is untied defined in the specification
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
-    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
 }
 
 // Stock-LLVM ABI entry point (no dependence count at alloc time): reserve a
@@ -531,16 +531,10 @@ __kmpc_omp_target_task_alloc(
     flags.tiedness = TASK_UNTIED;   // target tasks are untied per the spec
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
-    constexpr void * ir = NULL;
-    constexpr size_t ir_size = 0;
-    constexpr void * ir_externs = NULL;
-    constexpr size_t ir_externs_count = 0;
+    constexpr kmp_task_jit_desc_t * jit_desc = NULL;   // stock ABI forwards no IR
     constexpr size_t n_args = 1;
     constexpr void * scatter = NULL;
-    constexpr void * ir_params = NULL;
-    constexpr size_t ir_params_count = 0;
-    constexpr int jit_proto = 0;
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;
@@ -562,17 +556,11 @@ __kmpc_omp_task_alloc(
                 "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
-    constexpr void * ir = NULL;
-    constexpr size_t ir_size = 0;
-    constexpr void * ir_externs = NULL;
-    constexpr size_t ir_externs_count = 0;
+    constexpr kmp_task_jit_desc_t * jit_desc = NULL;   // stock ABI forwards no IR
     constexpr size_t n_args = 1;
     constexpr void * scatter = NULL;
-    constexpr void * ir_params = NULL;
-    constexpr size_t ir_params_count = 0;
-    constexpr int jit_proto = 0;
     const kmp_int32 device_id = omp_get_initial_device();
-    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, ir, ir_size, ir_externs, ir_externs_count, n_args, scatter, ir_params, ir_params_count, jit_proto);
+    kmp_task_t * ktask = task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
     task_t * task = task_from_ktask(ktask);
     task_pad_accesses(task, TASK_ACCESSES(task), 0, XKOMP_FIXED_ACCESSES);
     return ktask;

@@ -2,7 +2,6 @@
 ** Copyright 2024,2025 INRIA
 **
 ** Contributors :
-** Thierry Gautier, thierry.gautier@inrialpes.fr
 ** Romain PEREIRA, romain.pereira@inria.fr + rpereira@anl.gov
 **
 ** This software is a computer program whose purpose is to execute
@@ -35,14 +34,48 @@
 ** knowledge of the CeCILL-C license and that you accept its terms.
 **/
 
-#ifndef __XKOMP_SUPPORT_H__
-# define __XKOMP_SUPPORT_H__
+/*
+ * Plain OpenMP driver for the OMPT bridge test. It exercises the instrumented
+ * paths: a parallel region (thread/parallel/implicit_task + barrier), explicit
+ * tasks with dependences (task_create/schedule/dependences), a taskwait and a
+ * taskgroup (sync_region). Run under OMP_TOOL_LIBRARIES=<tool.so>; the tool
+ * prints "XKOMP-OMPT:OK" once every expected callback has fired.
+ */
 
-# define XKOMP_SUPPORT_TARGET   @SUPPORT_TARGET@
-# define XKOMP_SUPPORT_LIBFFI   @SUPPORT_LIBFFI@
+# include <omp.h>
 
-/* OMPT (OpenMP Tools interface) bridge, built on top of the XKRT tooling
- * interface (XKRT-T). Requires XKRT to be built with `-DUSE_TOOLS=ON`. */
-# define XKOMP_SUPPORT_OMPT     @SUPPORT_OMPT@
+# include <cassert>
+# include <cstdio>
 
-#endif /* __XKOMP_SUPPORT_H__ */
+int
+main(void)
+{
+    int x = 0, y = 0, z = 0;
+
+    # pragma omp parallel num_threads(4)
+    {
+        # pragma omp barrier
+
+        # pragma omp single
+        {
+            # pragma omp task depend(out: x) shared(x)
+            { x = 1; }
+
+            # pragma omp task depend(in: x) depend(out: y) shared(x, y)
+            { y = x + 1; }
+
+            # pragma omp taskwait
+            assert(x == 1 && y == 2);
+
+            # pragma omp taskgroup
+            {
+                # pragma omp task shared(z)
+                { z = 3; }
+            }
+            assert(z == 3);
+        }
+    }
+
+    printf("x=%d y=%d z=%d\n", x, y, z);
+    return 0;
+}

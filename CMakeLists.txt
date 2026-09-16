@@ -24,9 +24,10 @@ else()
 endif()
 
 xkoption(SUPPORT_MICROTASK_GENERIC "Use generic implem for kmp microtasks (limited in number of arguments)." OFF)
-xkoption(SUPPORT_MICROTASK_LIBFFI "Use libffi for kmp microtasks (experimental)." OFF)
 xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86_64 implementation for kmp microtasks." ${_XK_MT_INTEL_DEFAULT})
 xkoption(SUPPORT_MICROTASK_ARM "Use ARM aarch64 implementation for kmp microtasks." ${_XK_MT_ARM_DEFAULT})
+
+xkoption(SUPPORT_OMPT "Build the OMPT (OpenMP Tools) bridge on top of XKRT-T (requires XKRT built with -DUSE_TOOLS=ON)." OFF)
 
 ###############
 # C++ version #
@@ -66,6 +67,11 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/xkomp/parallel.cc
     ${CMAKE_SOURCE_DIR}/src/xkomp/taskgraph.cc
 )
+
+# OMPT bridge (XKRT-T -> OMPT). Self-guarded by XKOMP_SUPPORT_OMPT/XKRT_SUPPORT_TOOLS.
+if (SUPPORT_OMPT)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/ompt/ompt.cc)
+endif()
 
 # if target is enabled, add sources
 if (SUPPORT_TARGET)
@@ -141,6 +147,11 @@ include_directories(${CMAKE_SOURCE_DIR}/src/)
 # XK Runtime
 find_package(XKRT REQUIRED NO_MODULE)
 target_link_libraries(${XKOMP} PRIVATE XKRT::xkrt)
+
+# OMPT bridge needs libdl to dlopen tools passed through OMP_TOOL_LIBRARIES
+if (SUPPORT_OMPT)
+    target_link_libraries(${XKOMP} PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # libffi
 if (SUPPORT_MICROTASK_LIBFFI)

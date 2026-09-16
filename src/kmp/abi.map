@@ -1,4 +1,4 @@
-KMP_VERSION {
+VERSION {
     global:
 
         omp_get_thread_num;

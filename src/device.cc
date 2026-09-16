@@ -41,9 +41,6 @@ int
 xkomp_get_device_num(void)
 {
     thread_t * thread = thread_t::get_tls();
-<<<<<<< HEAD
-    return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? omp_get_initial_device() : thread->device_unique_id - 1);
-=======
     return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? xkomp_get_initial_device() : thread->device_unique_id - 1);
 }
 EXPORT_OMP_ABI(get_device_num);
@@ -64,6 +61,48 @@ xkomp_is_initial_device(void)
 }
 EXPORT_OMP_ABI(is_initial_device);
 
+extern "C"
+void *
+xkomp_target_alloc(size_t size, int device_num)
+{
+    xkomp_t * xkomp = xkomp_get();
+    const device_unique_id_t device_unique_id = omp_device_id_to_xkomp(device_num);
+    area_chunk_t * chunk = xkomp->runtime.memory_device_allocate(device_unique_id, size);
+    return (void *) chunk->ptr;
+}
+EXPORT_OMP_ABI(target_alloc);
+
+extern "C"
+void
+xkomp_target_free(void * device_ptr, int device_num)
+{
+    LOGGER_WARN("TODO: xkomp_target_free not implemented, is a noop right now");
+}
+EXPORT_OMP_ABI(target_free);
+
+extern "C"
+int
+xkomp_target_memcpy(
+    void * dst,
+    const void * src,
+    size_t length,
+    size_t dst_offset,
+    size_t src_offset,
+    int dst_device_num,
+    int src_device_num
+) {
+    xkomp_t * xkomp = xkomp_get();
+
+    const size_t size = length;
+    const device_unique_id_t dst_device_unique_id = omp_device_id_to_xkomp(dst_device_num);
+    const device_unique_id_t src_device_unique_id = omp_device_id_to_xkomp(src_device_num);
+    const uintptr_t          dst_device_addr      = ((uintptr_t) dst) + dst_offset;
+    const uintptr_t          src_device_addr      = ((uintptr_t) src) + src_offset;
+    xkomp->runtime.memory_copy(size, dst_device_unique_id, dst_device_addr, src_device_unique_id, src_device_addr);
+    return 0;
+}
+EXPORT_OMP_ABI(target_memcpy);
+
 /////////////////////////////
 // TARGET MEMORY TRANSFERS //
 /////////////////////////////
@@ -83,7 +122,6 @@ xkomp_target_memcpy_async(
 ) {
     LOGGER_FATAL("Not implemented");
     return -1;
->>>>>>> e7c7bdaee31cfbc1ef98416bc352d4d72b91da3d
 }
 EXPORT_OMP_ABI(target_memcpy_async);
 
