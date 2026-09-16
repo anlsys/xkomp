@@ -26,15 +26,12 @@ int
 xkomp_get_num_devices(void)
 {
     xkomp_t * xkomp = xkomp_get();
-    return xkomp->runtime.get_ndevices();
+    return xkomp->runtime.get_ndevices() - 1;
 }
 EXPORT_OMP_ABI(get_num_devices);
 
 extern "C"
 int xkomp_get_initial_device(void);
-
-extern "C"
-int omp_get_initial_device(void);
 
 extern "C"
 int

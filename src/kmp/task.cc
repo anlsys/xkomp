@@ -507,6 +507,7 @@ __kmpc_omp_target_task_alloc_with_deps(
     # define TASK_UNTIED    0
     # define TASK_TIED      1
     flags.tiedness = TASK_UNTIED;
+
     return task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t, sizeof_shareds, task_entry, ndeps, nacs, device_id, jit_desc, n_args, scatter);
 }
 
@@ -786,6 +787,8 @@ __kmpc_omp_task_with_deps_v2(
     # define TASK_CURRENT_QUEUED        1
     return TASK_CURRENT_QUEUED;
 }
+
+
 
 extern "C"
 kmp_int32
