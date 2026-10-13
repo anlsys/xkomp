@@ -1,0 +1,50 @@
+see https://pm.bsc.es/ftp/ompss/doc/spec/programming_model.html#task-reductions
+
+Difficulties for specifying with current OpenMP specifications:
+    - 'depend' synchronizes tasks.
+    - 'reduction' rewrites data environments
+We want a clause on the task construct that do boths.
+
+Question: what should be the behavior of this?
+```
+int x;
+
+# pragma omp task reduction(+:x)    // default is 'shared' on 'x'
+    x += 1;
+
+# pragma omp task depend(in: x)     // default is firstprivate(x), should the user explicitly set shared(x) for this to work ?
+    putc(x);
+
+# pragma omp taskwait
+```
+
+
+Maybe another way around is to define 'reduction' on the 'access' clause instead:
+```
+# pragma omp task access(reduction: x)
+    x += 1;
+
+# pragma omp task access(read: x)
+    putc(x);
+```
+
+
+
+------------------------------
+# depend clause
+
+[1] [TODO: define a term that incorporate all concurrent tasks with the same inoutset storage location]
+
+------------------------------
+# task construct
+
+When a reduction clause is specified with a <list> argument, for each item of <list>
+- the task behaves as-if depend(inoutset: <item>) clauses were set.
+
+- each task of [1] form a reduction, in which all and only them participate.
+
+- the original list item contains the result of the reduction, either:
+    - before [successors of the inoutset on the same storage location starts]
+    - after the completion of a taskwait [... TODO]
+
+------------------------------
