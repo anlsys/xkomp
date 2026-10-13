@@ -9,7 +9,7 @@ parse_places(
     const char * places
 ) {
     if (places == NULL)
-        return XKRT_TEAM_BINDING_PLACES_HYPERTHREAD;
+        return XKRT_TEAM_BINDING_PLACES_THREAD;
 
     struct mapping_struct_s {
         const char * name;
@@ -17,7 +17,7 @@ parse_places(
     };
 
     constexpr struct mapping_struct_s mapping[] = {
-        {  "threads",   XKRT_TEAM_BINDING_PLACES_HYPERTHREAD},
+        {  "threads",   XKRT_TEAM_BINDING_PLACES_THREAD     },
         {  "cores",     XKRT_TEAM_BINDING_PLACES_CORE       },
         {  "L1s",       XKRT_TEAM_BINDING_PLACES_L1         },
         {  "L2s",       XKRT_TEAM_BINDING_PLACES_L2         },
