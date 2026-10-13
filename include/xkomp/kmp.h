@@ -4,10 +4,6 @@
 # include <stdint.h>
 # include <stdlib.h>
 
-int __kmp_invoke_microtask(
-    void (*pkfn) (int * global_tid, int * bound_tid, ...),
-    int gtid, int npr, int argc, void *argv[] );
-
 typedef char kmp_int8;
 typedef unsigned char kmp_uint8;
 typedef short kmp_int16;
@@ -130,6 +126,22 @@ typedef struct kmp_task { /* GEH: Shouldn't this be aligned somehow? */
     /* future data */
     /*  private vars  */
 } kmp_task_t;
+
+/* Per-task JIT source descriptor emitted by the compiler and passed to the
+ * task-alloc calls below (or NULL, meaning no IR was forwarded). Bundling the
+ * fields into one descriptor keeps the alloc ABI stable and lets the compiler
+ * fill it at end-of-translation-unit. All fields are 8 bytes (no padding). */
+typedef struct kmp_task_jit_desc_t
+{
+    const void * ir;             /* serialized task-body LLVM bitcode (or NULL) */
+    uint64_t     ir_size;
+    const void * externs;        /* externalized-global resolution table (or NULL) */
+    uint64_t     externs_count;
+    const void * params;         /* per-parameter descriptors (or NULL) */
+    uint64_t     params_count;
+    int64_t      proto;          /* entry ABI requested by -fopenmp-task-jit-type */
+    const char * entry_name;     /* closure entry function name (JIT resolves by it) */
+}               kmp_task_jit_desc_t;
 
 typedef void (*kmpc_micro)(kmp_int32 *global_tid, kmp_int32 *bound_tid, ...);
 
@@ -273,8 +285,15 @@ typedef struct kmp_access_info {
     } flags;
 } kmp_access_info_t;
 
-int
-__kmp_omp_target_memcpy_async(
+# ifdef __cplusplus
+extern "C" {
+# endif /* __cplusplus */
+
+int __kmp_invoke_microtask(
+    void (*pkfn) (int * global_tid, int * bound_tid, ...),
+    int gtid, int npr, int argc, void *argv[] );
+
+int __kmp_omp_target_memcpy_async(
     void * dst_ptr,
     const void * src_ptr,
     size_t length,
@@ -285,5 +304,9 @@ __kmp_omp_target_memcpy_async(
     int depobj_count,
     void * depobj_list
 );
+
+# ifdef __cplusplus
+};
+# endif /* __cplusplus */
 
 #endif /* __KMP_H__ */

@@ -13,9 +13,21 @@ project(${XKOMP} C CXX ASM)
 
 include(BooleanUtils)
 xkoption(SUPPORT_TARGET "Build support for target constructs, which requires LLVM." ON)
+
+# Default microtask backend follows the host ISA: aarch64 -> ARM asm, else x86 asm.
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(_XK_MT_INTEL_DEFAULT OFF)
+    set(_XK_MT_ARM_DEFAULT   ON)
+else()
+    set(_XK_MT_INTEL_DEFAULT ON)
+    set(_XK_MT_ARM_DEFAULT   OFF)
+endif()
+
 xkoption(SUPPORT_MICROTASK_GENERIC "Use generic implem for kmp microtasks (limited in number of arguments)." OFF)
-xkoption(SUPPORT_MICROTASK_LIBFFI "Use libffi for kmp microtasks (experimental)." OFF)
-xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86 implementation for kmp microtasks." ON)
+xkoption(SUPPORT_MICROTASK_INTEL "Use Intel x86_64 implementation for kmp microtasks." ${_XK_MT_INTEL_DEFAULT})
+xkoption(SUPPORT_MICROTASK_ARM "Use ARM aarch64 implementation for kmp microtasks." ${_XK_MT_ARM_DEFAULT})
+
+xkoption(SUPPORT_OMPT "Build the OMPT (OpenMP Tools) bridge on top of XKRT-T (requires XKRT built with -DUSE_TOOLS=ON)." OFF)
 
 ###############
 # C++ version #
@@ -56,6 +68,11 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/xkomp/taskgraph.cc
 )
 
+# OMPT bridge (XKRT-T -> OMPT). Self-guarded by XKOMP_SUPPORT_OMPT/XKRT_SUPPORT_TOOLS.
+if (SUPPORT_OMPT)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/ompt/ompt.cc)
+endif()
+
 # if target is enabled, add sources
 if (SUPPORT_TARGET)
     list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/target/api.cc)
@@ -80,9 +97,14 @@ if (SUPPORT_MICROTASK_INTEL)
     math(EXPR enabled_count "${enabled_count} + 1")
 endif()
 
+if (SUPPORT_MICROTASK_ARM)
+    list(APPEND SOURCE_FILES ${CMAKE_SOURCE_DIR}/src/kmp/arch/aarch64.S)
+    add_compile_definitions(KMP_ARCH_AARCH64=1)
+    math(EXPR enabled_count "${enabled_count} + 1")
+endif()
+
 if(NOT enabled_count EQUAL 1)
-    message(FATAL_ERROR "Invalid configuration: Exactly one of  56 if (SUPPORT_MICROTASK_GENERIC)
-, SUPPORT_MICROTASK_LIBFFI, or SUPPORT_MICROTASK_INTEL must be ON. Currently, ${enabled_count} are enabled.")
+    message(FATAL_ERROR "Invalid configuration: Exactly one of SUPPORT_MICROTASK_GENERIC, SUPPORT_MICROTASK_LIBFFI, SUPPORT_MICROTASK_INTEL, or SUPPORT_MICROTASK_ARM must be ON. Currently, ${enabled_count} are enabled.")
 endif()
 
 # XKOMP Lib
@@ -125,6 +147,11 @@ include_directories(${CMAKE_SOURCE_DIR}/src/)
 # XK Runtime
 find_package(XKRT REQUIRED NO_MODULE)
 target_link_libraries(${XKOMP} PRIVATE XKRT::xkrt)
+
+# OMPT bridge needs libdl to dlopen tools passed through OMP_TOOL_LIBRARIES
+if (SUPPORT_OMPT)
+    target_link_libraries(${XKOMP} PRIVATE ${CMAKE_DL_LIBS})
+endif()
 
 # libffi
 if (SUPPORT_MICROTASK_LIBFFI)

@@ -6,6 +6,7 @@
 # include <assert.h>
 # include <stdarg.h>
 
+extern "C"
 int
 __kmp_invoke_microtask(
     kmpc_micro f,

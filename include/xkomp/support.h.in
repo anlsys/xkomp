@@ -41,4 +41,8 @@
 # define XKOMP_SUPPORT_TARGET   @SUPPORT_TARGET@
 # define XKOMP_SUPPORT_LIBFFI   @SUPPORT_LIBFFI@
 
+/* OMPT (OpenMP Tools interface) bridge, built on top of the XKRT tooling
+ * interface (XKRT-T). Requires XKRT to be built with `-DUSE_TOOLS=ON`. */
+# define XKOMP_SUPPORT_OMPT     @SUPPORT_OMPT@
+
 #endif /* __XKOMP_SUPPORT_H__ */

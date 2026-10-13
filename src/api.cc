@@ -16,6 +16,9 @@ xkomp_get(void)
         assert(xkomp);
         new (&xkomp->formats.kmp.per_loc) std::unordered_map<void *, task_format_id_t>();
         xkomp->formats.kmp.per_loc_lock = SPINLOCK_INITIALIZER;
+        // register the OMPT bridge before init(), so runtime.init() discovers
+        // and activates the OMPT tool (no-op if OMPT support is disabled)
+        XKOMP_OMPT_EMIT(connect, &xkomp->runtime);
         xkomp->runtime.init();
         xkomp_env_init(&xkomp->env);
         xkomp_task_register_formats(xkomp);
@@ -114,7 +117,6 @@ EXPORT_OMP_ABI(get_wtime);
 // init/deinit of the shared library //
 ///////////////////////////////////////
 
-# if 0
 void __attribute__((constructor))
 __xkomp_init(void)
 {
@@ -125,18 +127,16 @@ __xkomp_init(void)
 void __attribute__((destructor))
 __xkomp_teardown(void)
 {
-    assert(xkomp);
+    // if (xkomp)
+    // {
+    //     for (xkomp_team_entry_t & entry : xkomp->teams)
+    //         xkomp->runtime.team_join(&entry.team);
+    //     xkomp->teams.~small_vector_t();
 
-    // join the cached persistent teams (wakes + reaps their parked workers)
-    // before tearing down the runtime they may still touch
-    for (xkomp_team_entry_t & entry : xkomp->teams)
-        xkomp->runtime.team_join(&entry.team);
-    xkomp->teams.~small_vector_t();
-
-    xkomp->runtime.deinit();
-    xkomp->taskgraphs.~map();
-    xkomp->formats.kmp.per_loc.~unordered_map();
-    free(xkomp);
-    xkomp = NULL;
+    //     xkomp->runtime.deinit();
+    //     xkomp->taskgraphs.~map();
+    //     xkomp->formats.kmp.per_loc.~unordered_map();
+    //     free(xkomp);
+    //     xkomp = NULL;
+    // }
 }
-# endif
