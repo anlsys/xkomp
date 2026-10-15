@@ -70,15 +70,8 @@ main(int argc, char ** argv)
                 u[i] = v[i] = 0.5f;
 
             double t0 = omp_get_wtime();
-            // preallocate large chunk of memories, to avoid reallocation on iteration 2
-            for (int j = 0; j < ndevices; ++j)
-            {
-                # pragma omp target update nowait device(j) access(read: u[j*bs-GHOST:bs+2*GHOST]) access(read: v[j*bs-GHOST:bs+2*GHOST])
 
-            } // for j, devices
-
-            int i;
-            for (i = 0; i < N_ITER; ++i)
+            for (int i = 0; i < N_ITER; ++i)
             {
                 TYPE * tmp = u; u = v; v = tmp;
                 for (int j = 0; j < ndevices; ++j)
@@ -95,11 +88,8 @@ main(int argc, char ** argv)
                 } // for j, devices
             } // for i, iterations
 
-            # pragma omp task access(read: v[0:n])
-                {}
-
             double tg = omp_get_wtime();
-            # pragma omp taskwait
+            # pragma omp taskwait access(read: v[0:n])
             double tf = omp_get_wtime();
 
                 # if DUMP

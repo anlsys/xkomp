@@ -13,18 +13,6 @@ extern "C" {
 #  include <omp.h>
 # endif
 
-# if TRACE
-extern "C" void ompt_set_task_name(const char * name);
-#  define SET_LABEL(...)            \
-    do {                            \
-        char buffer[128];           \
-        snprintf(buffer, sizeof(buffer), __VA_ARGS__);  \
-        ompt_set_task_name(buffer); \
-    } while (0)
-# else
-#  define SET_LABEL(...)
-# endif
-
 typedef float TYPE;
 
 int
@@ -111,8 +99,6 @@ main(int argc, char ** argv)
             for (int j = 0; j < ndevices; ++j)          // Allocation and initial H2D
             {
                 # pragma omp target enter data map(alloc: u[j*bs-GHOST:bs+2*GHOST], v[j*bs-GHOST:bs+2*GHOST]) device(j)
-
-                SET_LABEL("alloc device %d", j);
                 # pragma omp target update nowait to(u[j*bs-GHOST:bs+2*GHOST], v[j*bs-GHOST:bs+2*GHOST]) depend(out: u_deps[j], v_deps[j]) device(j)
             }
 
@@ -123,7 +109,6 @@ main(int argc, char ** argv)
                 TYPE * tmp = u; u = v; v = tmp;
                 for (int j = 0; j < ndevices; ++j)
                 {
-                    SET_LABEL("compute device %d iter %d", j, i);
                     # pragma omp target teams distribute parallel for nowait device(j) depend(in: u_deps[j]) depend(out: v_deps[j])
                     for (int k = j*bs ; k < (j+1)*bs ; ++k)
                     {
@@ -171,13 +156,7 @@ main(int argc, char ** argv)
 
                         // forwarding a single cell
                         size_t len = GHOST * sizeof(TYPE);
-                        SET_LABEL("forward device src=%d to dst=%d iter %d", j, jj, i);
-                        # if XKOMP
-                        __kmp_omp_target_memcpy_async(dst, src, len, dst_offset, src_offset, jj, j, 2, deps);
-                        # else
-                        omp_target_memcpy_async(dst, src, len, dst_offset, src_offset, jj, j, 2, deps);
-                        # endif
-
+zsh:1: command not found: ABEM
                     } // for dj, neighbors
                     # endif
 
@@ -186,7 +165,6 @@ main(int argc, char ** argv)
 
             for (int j = 0; j < ndevices; ++j)          // Final multiple D2H
             {
-                SET_LABEL("final d2h src=%d", j);
                 # pragma omp target update nowait from(v[j*bs:bs]) device(j) depend(out: v_deps[j])
             }
 
