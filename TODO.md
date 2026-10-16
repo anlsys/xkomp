@@ -1,4 +1,5 @@
 # TODO list
+1. Explore either implementing "private" task storage in a thread-local-storage (TLS) --- of the thread that scheduled the task --- could improve performance, rather than a task-local-storage (as per now, that is allocated in the producer thread). Typically, by patching the compiler to retrieve that TLS at the start of the task, and offsetting private variables in it.
 1. Implement a C++ interface, ala xkomp++.h but for all constructs
 1. access clause: add missing front-end in Clang and unit-tests for each clause/modifier.
 1. taskgraph construct: implement front-end in Clang.
