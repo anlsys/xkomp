@@ -526,9 +526,9 @@ __kmpc_omp_target_task_alloc(
     kmp_routine_entry_t task_entry,
     kmp_int64 device_id
 ) {
-    LOGGER_WARN("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
-                "are supported; use the patched LLVM/clang for XKOMP for unlimited "
-                "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
+    LOGGER_WARN_ONCE("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
+                     "are supported; use the patched LLVM/clang for XKOMP for unlimited "
+                     "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
     flags.tiedness = TASK_UNTIED;   // target tasks are untied per the spec
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
@@ -552,9 +552,9 @@ __kmpc_omp_task_alloc(
     size_t sizeof_shareds,
     kmp_routine_entry_t task_entry
 ) {
-    LOGGER_WARN("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
-                "are supported; use the patched LLVM/clang for XKOMP for unlimited "
-                "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
+    LOGGER_WARN_ONCE("Stock LLVM/clang ABI: at most %d dependences/accesses per task "
+                     "are supported; use the patched LLVM/clang for XKOMP for unlimited "
+                     "dependences and best performance.", (int) XKOMP_FIXED_ACCESSES);
     constexpr kmp_int32 ndeps = XKOMP_FIXED_ACCESSES;
     constexpr kmp_int32 nacs  = 0;
     constexpr kmp_task_jit_desc_t * jit_desc = NULL;   // stock ABI forwards no IR
@@ -612,6 +612,26 @@ __kmpc_omp_task(
 // submits the task on the normal path; the runtime suspends the encountering
 // thread after committing it (see task_alloc + the TASK_FLAG_UNDEFERABLE checks
 // in __kmpc_omp_task / __kmpc_omp_task_with_deps_v2).
+
+extern "C"
+void
+__kmpc_omp_task_begin_if0(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_task_t * task
+) {
+    LOGGER_FATAL("Not implemented");
+}
+
+extern "C"
+void
+__kmpc_omp_task_complete_if0(
+    ident_t * loc_ref,
+    kmp_int32 gtid,
+    kmp_task_t * task
+) {
+    LOGGER_FATAL("Not implemented");
+}
 
 extern "C"
 void

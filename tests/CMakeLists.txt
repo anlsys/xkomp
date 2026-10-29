@@ -254,6 +254,9 @@ endfunction()
 # "_packed") so one source can be registered under both ABIs. Requires the
 # patched clang that knows the flag (as the whole taskgraph/JIT group does).
 function(xkomp_add_packed_test src label)
+    if(NOT LLVM_IS_ANL)
+        return()
+    endif()
     _xkomp_test_paths("${src}")
     set(_xk_tgt  "${_xk_tgt}_packed")
     set(_xk_test "${_xk_test}_packed")
@@ -273,6 +276,9 @@ endfunction()
 # keeps the pointers JIT/fusion path covered in-tree. Suffix "_pointers" so one
 # source can be registered under both ABIs (mirrors xkomp_add_packed_test).
 function(xkomp_add_pointers_test src label)
+    if(NOT LLVM_IS_ANL)
+        return()
+    endif()
     _xkomp_test_paths("${src}")
     set(_xk_tgt  "${_xk_tgt}_pointers")
     set(_xk_test "${_xk_test}_pointers")

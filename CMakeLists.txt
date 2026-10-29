@@ -37,6 +37,9 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)  # Optional: disables compiler-specific extensions
 
+include(CheckCCompilerFlag)
+check_c_compiler_flag("-fopenmp-task-jit-abi=packed" LLVM_IS_ANL)
+
 #########
 # XKOMP #
 #########
