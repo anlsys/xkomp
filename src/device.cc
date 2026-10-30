@@ -5,122 +5,38 @@
 /* In OpenMP, non-host devices are indexed from 0 to n-1 where 'n' is the value
  * returned by 'omp_get_num_devices' */
 
-extern "C"
-void
-xkomp_set_default_device(int device)
-{
+OMP_API(void, set_default_device,
+    int device
+) {
     LOGGER_NOT_IMPLEMENTED();
 }
-EXPORT_OMP_ABI(set_default_device);
 
-extern "C"
-int
-xkomp_get_default_device(void)
+OMP_API(int, get_default_device)
 {
     return 0;
 }
-EXPORT_OMP_ABI(get_default_device);
 
-extern "C"
-int
-xkomp_get_num_devices(void)
+OMP_API(int, get_num_devices)
 {
     xkomp_t * xkomp = xkomp_get();
     return xkomp->runtime.get_ndevices() - 1;
 }
-EXPORT_OMP_ABI(get_num_devices);
 
-extern "C"
-int xkomp_get_initial_device(void);
-
-extern "C"
-int
-xkomp_get_device_num(void)
+OMP_API(int, get_device_num)
 {
     thread_t * thread = thread_t::get_tls();
     return (int) (thread->device_unique_id == XKRT_HOST_DEVICE_UNIQUE_ID ? xkomp_get_initial_device() : thread->device_unique_id - 1);
 }
-EXPORT_OMP_ABI(get_device_num);
 
-extern "C"
-int
-xkomp_get_initial_device(void)
+OMP_API(int, get_initial_device)
 {
     return xkomp_get_num_devices();
 }
-EXPORT_OMP_ABI(get_initial_device);
 
-extern "C"
-int
-xkomp_is_initial_device(void)
+OMP_API(int, is_initial_device)
 {
     return xkomp_get_device_num() == xkomp_get_initial_device();
 }
-EXPORT_OMP_ABI(is_initial_device);
-
-extern "C"
-void *
-xkomp_target_alloc(size_t size, int device_num)
-{
-    xkomp_t * xkomp = xkomp_get();
-    const device_unique_id_t device_unique_id = omp_device_id_to_xkomp(device_num);
-    area_chunk_t * chunk = xkomp->runtime.memory_device_allocate(device_unique_id, size);
-    return (void *) chunk->ptr;
-}
-EXPORT_OMP_ABI(target_alloc);
-
-extern "C"
-void
-xkomp_target_free(void * device_ptr, int device_num)
-{
-    LOGGER_WARN("TODO: xkomp_target_free not implemented, is a noop right now");
-}
-EXPORT_OMP_ABI(target_free);
-
-extern "C"
-int
-xkomp_target_memcpy(
-    void * dst,
-    const void * src,
-    size_t length,
-    size_t dst_offset,
-    size_t src_offset,
-    int dst_device_num,
-    int src_device_num
-) {
-    xkomp_t * xkomp = xkomp_get();
-
-    const size_t size = length;
-    const device_unique_id_t dst_device_unique_id = omp_device_id_to_xkomp(dst_device_num);
-    const device_unique_id_t src_device_unique_id = omp_device_id_to_xkomp(src_device_num);
-    const uintptr_t          dst_device_addr      = ((uintptr_t) dst) + dst_offset;
-    const uintptr_t          src_device_addr      = ((uintptr_t) src) + src_offset;
-    xkomp->runtime.memory_copy(size, dst_device_unique_id, dst_device_addr, src_device_unique_id, src_device_addr);
-    return 0;
-}
-EXPORT_OMP_ABI(target_memcpy);
-
-/////////////////////////////
-// TARGET MEMORY TRANSFERS //
-/////////////////////////////
-
-extern "C"
-int
-xkomp_target_memcpy_async(
-    void * dst,
-    const void * src,
-    size_t length,
-    size_t dst_offset,
-    size_t src_offset,
-    int dst_device_num,
-    int src_device_num,
-    int depobj_count,
-    omp_depend_t * depobj_list
-) {
-    LOGGER_FATAL("Not implemented");
-    return -1;
-}
-EXPORT_OMP_ABI(target_memcpy_async);
 
 /////////////////////
 // XKOMP EXTENSION //

@@ -63,20 +63,15 @@ xkomp_task_register_formats(xkomp_t * xkomp)
 // STANDARD OPENMP API //
 /////////////////////////
 
-extern "C"
-int
-xkomp_get_thread_num(void)
+OMP_API(int, get_thread_num)
 {
     thread_t * tls = thread_t::get_tls();
     assert(tls);
 
     return tls->tid;
 }
-EXPORT_OMP_ABI(get_thread_num);
 
-extern "C"
-int
-xkomp_get_num_threads(void)
+OMP_API(int, get_num_threads)
 {
     thread_t * tls = thread_t::get_tls();
     assert(tls);
@@ -84,11 +79,8 @@ xkomp_get_num_threads(void)
     // outside any parallel region (no team), the spec mandates returning 1
     return tls->team ? tls->team->priv.nthreads : 1;
 }
-EXPORT_OMP_ABI(get_num_threads);
 
-extern "C"
-int
-xkomp_get_max_threads(void)
+OMP_API(int, get_max_threads)
 {
     xkomp_t * xkomp = xkomp_get();
     int nthreads = xkomp->env.OMP_NUM_THREADS;
@@ -103,15 +95,11 @@ xkomp_get_max_threads(void)
     }
     return MIN(nthreads, xkomp->env.OMP_THREAD_LIMIT);
 }
-EXPORT_OMP_ABI(get_max_threads);
 
-extern "C"
-double
-xkomp_get_wtime(void)
+OMP_API(double, get_wtime)
 {
     return get_nanotime() / 1.0e9;
 }
-EXPORT_OMP_ABI(get_wtime);
 
 ///////////////////////////////////////
 // init/deinit of the shared library //

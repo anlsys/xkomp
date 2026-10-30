@@ -50,6 +50,7 @@ SET(SOURCE_FILES
     ${CMAKE_SOURCE_DIR}/src/api.cc
     ${CMAKE_SOURCE_DIR}/src/device.cc
     ${CMAKE_SOURCE_DIR}/src/env.cc
+    ${CMAKE_SOURCE_DIR}/src/target.cc
 
     # GOMP
     ${CMAKE_SOURCE_DIR}/src/gomp/task.cc

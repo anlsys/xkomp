@@ -10,16 +10,23 @@ XKOMP_VERSION {
         xkomp_access_pointer;
 
         /* xkomp_* aliases for the standard OMP API */
-        xkomp_get_thread_num;
-        xkomp_get_num_threads;
-        xkomp_get_max_threads;
-        xkomp_get_wtime;
-        xkomp_set_default_device;
         xkomp_get_default_device;
-        xkomp_get_num_devices;
         xkomp_get_device_num;
         xkomp_get_initial_device;
+        xkomp_get_mapped_ptr;
+        xkomp_get_max_threads;
+        xkomp_get_num_devices;
+        xkomp_get_num_threads;
+        xkomp_get_thread_num;
+        xkomp_get_wtime;
         xkomp_is_initial_device;
+        xkomp_set_default_device;
+        xkomp_target_alloc;
+        xkomp_target_associate_ptr;
+        xkomp_target_dissociate_ptr;
+        xkomp_target_free;
+        xkomp_target_is_present;
+        xkomp_target_memcpy;
         xkomp_target_memcpy_async;
 
     local:

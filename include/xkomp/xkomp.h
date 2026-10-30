@@ -11,26 +11,25 @@
 # include <unordered_map>
 
 /**
- * EXPORT_OMP_ABI(suffix)
+ * OMP_API(ret, name, params...)
  *
- * Place this macro after a function defined as `xkomp_<suffix>(...)`.
- * It automatically exports three symbols from a single implementation:
- *
- *   1. xkomp_<suffix>          — native XKOMP symbol
- *   2. omp_<suffix>@VERSION    — KMP-compatible versioned symbol
- *   3. omp_<suffix>@@OMP_API_VERSION — default OMP API versioned symbol
+ * Defines `xkomp_<name>` and exports it as:
+ *   1. xkomp_<name>                 - native XKOMP symbol
+ *   2. omp_<name>@VERSION           - KMP-compatible versioned symbol
+ *   3. omp_<name>@@OMP_API_VERSION  - default OMP API versioned symbol
  *
  * Example:
- *   extern "C" int xkomp_get_num_threads(void) { ... }
- *   EXPORT_OMP_ABI(get_num_threads);
+ *   OMP_API(int, get_num_threads, void) { ... }
  */
-#define EXPORT_OMP_ABI(suffix) \
-    extern "C" __typeof__(xkomp_##suffix) __omp_api_##suffix \
-        __attribute__((alias("xkomp_" #suffix))); \
-    __asm__(".symver __omp_api_" #suffix ", omp_" #suffix "@@OMP_API_VERSION"); \
-    extern "C" __typeof__(xkomp_##suffix) __omp_kmp_##suffix \
-        __attribute__((alias("xkomp_" #suffix))); \
-    __asm__(".symver __omp_kmp_" #suffix ", omp_" #suffix "@VERSION")
+#define OMP_API(ret, name, ...)                                                \
+    extern "C" ret xkomp_##name(__VA_ARGS__);                                  \
+    extern "C" __typeof__(xkomp_##name) xkomp_alias_api_##name                 \
+        __attribute__((alias("xkomp_" #name)));                                \
+    __asm__(".symver xkomp_alias_api_" #name ", omp_" #name "@@OMP_API_VERSION"); \
+    extern "C" __typeof__(xkomp_##name) xkomp_alias_kmp_##name                 \
+        __attribute__((alias("xkomp_" #name)));                                \
+    __asm__(".symver xkomp_alias_kmp_" #name ", omp_" #name "@VERSION");       \
+    extern "C" ret xkomp_##name(__VA_ARGS__)
 
 XKRT_NAMESPACE_USE;
 
@@ -110,8 +109,6 @@ xkomp_taskgraph_t * xkomp_taskgraph_begin(int graph_id, xkomp_taskgraph_flags_t 
 extern "C"
 void xkomp_taskgraph_end(xkomp_taskgraph_t * taskgraph);
 
-
-
 /* max number of distinct thread counts cached at once. Teams are stored in-place
  * in the small vector, so this is its inline capacity: growing beyond it would
  * relocate the teams and dangle their worker threads. We never expect more than
@@ -182,6 +179,10 @@ void xkomp_task_register_formats_kmp_target(xkomp_t * xkomp);
 /* # pragma omp parallel */
 extern "C"
 void xkomp_parallel(unsigned int nthreads, team_routine_t routine, void * args);
+
+//////////
+// OMPT //
+//////////
 
 /*
  * OMPT bridge. When XKRT provides the tooling interface and XKOMP was built with

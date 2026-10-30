@@ -12,7 +12,7 @@ typedef void * omp_depend_t;
 /**
  * For each omp_<suffix> function, declare both the omp_<suffix> and
  * xkomp_<suffix> prototypes.  The actual symbol versioning is handled by
- * the EXPORT_OMP_ABI macro in the .cc files; the declarations here let
+ * the OMP_API macro in the .cc files; the declarations here let
  * callers use either name.
  */
 #define DECLARE_OMP_ABI(ret, suffix, ...) \
@@ -45,9 +45,13 @@ extern "C"
     DECLARE_OMP_ABI(int, target_memcpy,       void * dst, const void * src, size_t length, size_t dst_offset, size_t src_offset, int dst_device_num, int src_device_num);
     DECLARE_OMP_ABI(int, target_memcpy_async, void * dst, const void * src, size_t length, size_t dst_offset, size_t src_offset, int dst_device_num, int src_device_num, int depobj_count, omp_depend_t *depobj_list);
 
-    // TODO: currently in libomptarget, should be moved to xkomp
-    void * omp_get_mapped_ptr(const void * ptr, int device_num);
+    // target map
+    DECLARE_OMP_ABI(void *, get_mapped_ptr, const void * ptr, int device_num);
+    DECLARE_OMP_ABI(int, target_is_present, const void * ptr, int device_num);
+    DECLARE_OMP_ABI(int, target_associate_ptr, const void * host_ptr, const void * device_ptr, size_t size, size_t device_offset, int device_num);
+    DECLARE_OMP_ABI(int, target_disassociate_ptr, const void * ptr, int device_num);
 
+    /* sync hint */
     typedef enum    omp_sync_hint_t
     {
         omp_sync_hint_none           = 0,
