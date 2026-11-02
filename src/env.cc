@@ -81,7 +81,14 @@ xkomp_env_init_parse_taskgraph_opt(void)
         if (strcmp(tok, "none") == 0)
             continue;
 
-        const cgir::command_graph_pass_t pass = cgir::command_graph_pass_from_str(tok);
+        // convert pass name to bit
+        cgir::command_graph_pass_t pass = cgir::COMMAND_GRAPH_PASS_MAX;
+        if (strcmp(tok, "batch") == 0)
+            pass = cgir::COMMAND_GRAPH_PASS_PACK;
+        else
+            pass = cgir::command_graph_pass_from_str(tok);
+
+        // report wrong pas, or add it
         if (pass == cgir::COMMAND_GRAPH_PASS_MAX)
             // command_graph_pass_names() ends with a trailing ", ", so "none"
             // appends cleanly as the final accepted value

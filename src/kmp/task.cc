@@ -176,12 +176,7 @@ body_omp_task(
     // if recording, insert a new command for replay
     if (task->flags & TASK_FLAG_RECORD)
     {
-        static bool warned = false;
-        if (warned == false)
-        {
-            LOGGER_WARN("TODO: currently, assume XKRT tasks are never released, and so the OpenMP task and data environment can be passed as such... FIX ME! If the task gets released (it should), we should instead protect here by incrementing its ref counter, and when respawning the task during the replay, replicate its data environment ?");
-            warned = true;
-        }
+        LOGGER_WARN_ONCE("TODO: currently, assume XKRT tasks are never released, and so the OpenMP task and data environment can be passed as such... FIX ME! If the task gets released (it should), we should instead protect here by incrementing its ref counter, and when respawning the task during the replay, replicate its data environment ?");
 
         task_rec_info_t * rec = TASK_REC_INFO(task);
         assert(rec);
